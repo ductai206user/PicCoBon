@@ -1,14 +1,42 @@
+@using Microsoft.EntityFrameworkCore
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject PickleballClub.Services.ClubSettingsService ClubSettingsService
+@inject PickleballClub.Models.PickleballContext SsrDb
 @{
     var csrfTokens = Antiforgery.GetAndStoreTokens(Context);
+    var ssrSettings = await ClubSettingsService.GetSettingsAsync(SsrDb);
+    var ssrVipSurcharge = await SsrDb.TbCourts.AsNoTracking()
+        .Where(c => c.IsActive && c.Surcharge > 0)
+        .Select(c => c.Surcharge)
+        .FirstOrDefaultAsync();
+    if (ssrVipSurcharge <= 0) ssrVipSurcharge = 20000;
+    var vndFmt = new System.Globalization.NumberFormatInfo { NumberGroupSeparator = "." };
+    string ssrStdPriceNum = ssrSettings.BaseCourtPrice.ToString("#,0", vndFmt);
+    string ssrPeakTotalNum = (ssrSettings.BaseCourtPrice + ssrSettings.PeakSurchargePerHour).ToString("#,0", vndFmt);
+    string ssrVipNum = "+" + ssrVipSurcharge.ToString("#,0", vndFmt);
+    string ssrAddress = ssrSettings.RawCms.TryGetValue("address", out var addrVal) && !string.IsNullOrWhiteSpace(addrVal)
+        ? addrVal
+        : "Khu Thảo Điền, TP. Thủ Đức, TP.HCM";
 }
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="@csrfTokens.RequestToken">
     <title>@(ViewData["Title"] ?? "Spike Pickleball Club — Tổ Hợp Sân Pickleball Trong Nhà & Ngoài Trời")</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23D8F826'/%3E%3C/svg%3E">
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('spike_theme');
+                if (savedTheme === 'dark' || savedTheme === 'light') {
+                    document.documentElement.setAttribute('data-theme', savedTheme);
+                    document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+                }
+            } catch (_) {}
+        })();
+    </script>
     <link rel="stylesheet" href="~/css/styles.css" asp-append-version="true">
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 </head>
@@ -47,6 +75,22 @@
                         <a href="/Account/Login" class="btn btn-sm btn-secondary" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:#FFF;">Đăng nhập</a>
                     }
                 </div>
+                <button type="button"
+                        class="sh-site-theme-btn"
+                        id="siteThemeToggleBtn"
+                        onclick="toggleSpikeTheme()"
+                        aria-label="Chuyển đổi giao diện Sáng / Tối"
+                        title="Chuyển đổi giao diện Sáng / Tối">
+                    <iconify-icon icon="lucide:sun" width="16" class="sh-theme-icon-sun"></iconify-icon>
+                    <iconify-icon icon="lucide:moon" width="16" class="sh-theme-icon-moon"></iconify-icon>
+                </button>
+                @if (Function.IsLogin() && (Function._RoleId == 1 || Function._RoleId == 3))
+                {
+                    <a href="/Admin" class="btn btn-outline btn-sm btn-pill sh-public-admin-link" style="border-color:rgba(216,248,38,0.45);color:var(--color-volt);background:rgba(216,248,38,0.08);" title="Mở Trung tâm Quản trị">
+                        <iconify-icon icon="lucide:layout-dashboard" width="14"></iconify-icon>
+                        <span>Quản trị</span>
+                    </a>
+                }
                 <a href="/Booking" class="btn btn-primary btn-sm btn-pill header-cta-book">Đặt sân ngay</a>
                 <button type="button" class="mobile-menu-btn" onclick="toggleMobileNav()" aria-label="Mở menu điều hướng">
                     <iconify-icon icon="lucide:menu" width="20"></iconify-icon>
@@ -90,10 +134,10 @@
                 <div class="site-footer-col">
                     <h4>Bảng giá niêm yết</h4>
                     <div class="site-footer-links">
-                        <span>Giờ tiêu chuẩn (<span data-cms="openTime">06:00</span> – <span data-cms="peakStart">17:00</span>): <strong style="color:#FFF;" data-cms-price="courtPrice" data-cms="courtPriceFormatted">120.000 đ/h</strong></span>
-                        <span>Khung giờ vàng (<span data-cms="peakStart">17:00</span> – <span data-cms="closeTime">22:00</span>): <strong style="color:var(--color-volt);" data-cms-peak-total="true">150.000 đ/h</strong></span>
-                        <span>Phụ thu sân Indoor VIP: <strong style="color:#FFF;" data-cms="vipSurchargeFormatted">+20.000 đ/h</strong></span>
-                        <span>Giờ mở cửa: <strong style="color:#FFF;" data-cms="openHours">06:00 – 22:00</strong></span>
+                        <span>Giờ tiêu chuẩn (<span data-cms="openTime">@ssrSettings.OpenTime</span> – <span data-cms="peakStart">@ssrSettings.PeakStart</span>): <strong style="color:#FFF;" data-cms-price="courtPrice" data-cms="courtPriceFormatted">@ssrStdPriceNum đ/h</strong></span>
+                        <span>Khung giờ vàng (<span data-cms="peakStart">@ssrSettings.PeakStart</span> – <span data-cms="closeTime">@ssrSettings.CloseTime</span>): <strong style="color:var(--color-volt);" data-cms-peak-total="true">@ssrPeakTotalNum đ/h</strong></span>
+                        <span>Phụ thu sân Indoor VIP: <strong style="color:#FFF;" data-cms="vipSurchargeFormatted">@ssrVipNum đ/h</strong></span>
+                        <span>Giờ mở cửa: <strong style="color:#FFF;" data-cms="openHours">@ssrSettings.OpenTime – @ssrSettings.CloseTime</strong></span>
                     </div>
                 </div>
 
@@ -102,11 +146,11 @@
                     <div class="site-footer-links">
                         <span style="display:inline-flex;align-items:center;gap:0.45rem;">
                             <iconify-icon icon="lucide:map-pin" width="15" style="color:var(--color-primary);flex-shrink:0;"></iconify-icon>
-                            <span data-cms="address">Khu Thảo Điền, TP. Thủ Đức, TP.HCM</span>
+                            <span data-cms="address">@ssrAddress</span>
                         </span>
                         <span style="display:inline-flex;align-items:center;gap:0.45rem;">
                             <iconify-icon icon="lucide:phone" width="15" style="color:var(--color-primary);flex-shrink:0;"></iconify-icon>
-                            <span>Hotline: <strong style="color:var(--color-primary);" data-cms="hotline">0901 234 567</strong></span>
+                            <span>Hotline: <strong style="color:var(--color-primary);" data-cms="hotline">@ssrSettings.Hotline</strong></span>
                         </span>
                         <span style="display:inline-flex;align-items:center;gap:0.45rem;">
                             <iconify-icon icon="lucide:mail" width="15" style="color:var(--color-primary);flex-shrink:0;"></iconify-icon>

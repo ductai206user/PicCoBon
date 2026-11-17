@@ -1,6 +1,13 @@
+@using Microsoft.EntityFrameworkCore
+@inject PickleballClub.Services.ClubSettingsService ClubSettingsService
+@inject PickleballClub.Models.PickleballContext SsrDb
 @{
     Layout = "~/Areas/Admin/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Cấu Hình Website & Bảng Giá (CMS)";
+    var ssrSettings = await ClubSettingsService.GetSettingsAsync(SsrDb);
+    var vndFmt = new System.Globalization.NumberFormatInfo { NumberGroupSeparator = "." };
+    string ssrStdPriceNum = ssrSettings.BaseCourtPrice.ToString("#,0", vndFmt);
+    string ssrPeakTotalNum = (ssrSettings.BaseCourtPrice + ssrSettings.PeakSurchargePerHour).ToString("#,0", vndFmt);
 }
 
   <section class="page-hero">
@@ -119,15 +126,15 @@
               <h4 id="prevHeroTitle" style="color:#fff;font-size:1.1rem;font-weight:700">Tiêu đề</h4>
               <p id="prevHeroSubtitle" style="font-size:0.78rem;color:#CBD5E1">Mô tả...</p>
             </div>
-            <div style="background:#F8FAFC;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.9rem;display:flex;justify-content:space-between;align-items:center">
+            <div class="sh-subtle-panel" style="padding:0.9rem;display:flex;justify-content:space-between;align-items:center">
               <span class="text-xs font-semibold">Giá tiêu chuẩn / Giờ vàng:</span>
-              <span class="font-bold text-mono" id="prevPrice" style="color:var(--color-primary)">120.000 đ/h</span>
+              <span class="font-bold text-mono" id="prevPrice" style="color:var(--color-primary)">@ssrStdPriceNum đ / @ssrPeakTotalNum đ</span>
             </div>
-            <div style="background:#F8FAFC;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.9rem;display:flex;justify-content:space-between;align-items:center">
+            <div class="sh-subtle-panel" style="padding:0.9rem;display:flex;justify-content:space-between;align-items:center">
               <span class="text-xs font-semibold">Khung giờ mở cửa:</span>
-              <span class="font-bold text-mono" id="prevHours">06:00 – 22:00</span>
+              <span class="font-bold text-mono" id="prevHours">@ssrSettings.OpenTime – @ssrSettings.CloseTime (Vàng từ @ssrSettings.PeakStart)</span>
             </div>
-            <div style="background:#F8FAFC;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.9rem;display:flex;flex-direction:column;gap:0.3rem">
+            <div class="sh-subtle-panel" style="padding:0.9rem;display:flex;flex-direction:column;gap:0.3rem">
               <h5 id="prevClubTitle" style="font-size:0.88rem;font-weight:700">Hội viên CLB</h5>
               <p id="prevClubDesc" style="font-size:0.78rem;color:var(--text-secondary)">Quyền lợi...</p>
             </div>
@@ -144,8 +151,8 @@
       document.getElementById('cmsHeroSubtag').value = CMS_CONFIG.heroSubtag || '';
       document.getElementById('cmsHeroTitle').value = CMS_CONFIG.heroTitle || '';
       document.getElementById('cmsHeroSubtitle').value = CMS_CONFIG.heroSubtitle || '';
-      document.getElementById('cmsCourtPrice').value = CMS_CONFIG.courtPrice || 120000;
-      document.getElementById('cmsPeakSurcharge').value = CMS_CONFIG.peakSurcharge ?? 30000;
+      document.getElementById('cmsCourtPrice').value = resolveNumericConfig(CMS_CONFIG.courtPrice, 120000);
+      document.getElementById('cmsPeakSurcharge').value = resolveNumericConfig(CMS_CONFIG.peakSurcharge, 30000);
       document.getElementById('cmsPeakStart').value = CMS_CONFIG.peakStart || '17:00';
       document.getElementById('cmsHotline').value = CMS_CONFIG.hotline || '0901 234 567';
       document.getElementById('cmsOpenTime').value = CMS_CONFIG.openTime || '06:00';
@@ -166,8 +173,8 @@
       document.getElementById('prevHeroSubtag').textContent = document.getElementById('cmsHeroSubtag').value || '';
       document.getElementById('prevHeroTitle').textContent = document.getElementById('cmsHeroTitle').value || '';
       document.getElementById('prevHeroSubtitle').textContent = document.getElementById('cmsHeroSubtitle').value || '';
-      const price = parseInt(document.getElementById('cmsCourtPrice').value) || 120000;
-      const peakExtra = parseInt(document.getElementById('cmsPeakSurcharge').value) || 0;
+      const price = resolveNumericConfig(document.getElementById('cmsCourtPrice').value, 120000);
+      const peakExtra = resolveNumericConfig(document.getElementById('cmsPeakSurcharge').value, 0);
       document.getElementById('prevPrice').textContent = `${formatMoney(price)} / ${formatMoney(price + peakExtra)}`;
       const openT = document.getElementById('cmsOpenTime').value || '06:00';
       const closeT = document.getElementById('cmsCloseTime').value || '22:00';
@@ -183,8 +190,8 @@
         heroSubtag: document.getElementById('cmsHeroSubtag').value.trim(),
         heroTitle: document.getElementById('cmsHeroTitle').value.trim(),
         heroSubtitle: document.getElementById('cmsHeroSubtitle').value.trim(),
-        courtPrice: parseInt(document.getElementById('cmsCourtPrice').value) || 120000,
-        peakSurcharge: parseInt(document.getElementById('cmsPeakSurcharge').value) || 0,
+        courtPrice: resolveNumericConfig(document.getElementById('cmsCourtPrice').value, 120000),
+        peakSurcharge: resolveNumericConfig(document.getElementById('cmsPeakSurcharge').value, 0),
         peakStart: document.getElementById('cmsPeakStart').value || '17:00',
         hotline: document.getElementById('cmsHotline').value.trim(),
         openTime: document.getElementById('cmsOpenTime').value || '06:00',

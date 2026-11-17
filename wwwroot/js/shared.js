@@ -3,48 +3,21 @@
    Server-Authoritative Architecture (V2 Hardened: CSRF, ETag, Real QR)
    ================================================================ */
 
-const DEFAULT_COURTS = [
-  {
-    id: 1,
-    name: 'Sân VIP 01 (Arena A)',
-    type: 'Indoor',
-    typeLabel: 'Trong nhà · Mái vòm & Đèn LED Pro',
-    surface: 'Acrylic Cushion 8 lớp giảm chấn',
-    surcharge: 20000,
-    basePrice: 120000,
-    imageUrl: '/assets/court-vip-arena.png'
-  },
-  {
-    id: 2,
-    name: 'Sân VIP 02 (Arena B)',
-    type: 'Indoor',
-    typeLabel: 'Trong nhà · Mái vòm & Đèn LED Pro',
-    surface: 'Acrylic Cushion 8 lớp giảm chấn',
-    surcharge: 20000,
-    basePrice: 120000,
-    imageUrl: '/assets/court-vip-arena.png'
-  },
-  {
-    id: 3,
-    name: 'Sân Tiêu Chuẩn 03',
-    type: 'Outdoor',
-    typeLabel: 'Ngoài trời · Thoáng mát',
-    surface: 'Acrylic Pro 6 lớp',
-    surcharge: 0,
-    basePrice: 120000,
-    imageUrl: '/assets/hero-spike-pickleball.png'
-  },
-  {
-    id: 4,
-    name: 'Sân Tiêu Chuẩn 04',
-    type: 'Outdoor',
-    typeLabel: 'Ngoài trời · Thoáng mát',
-    surface: 'Acrylic Pro 6 lớp',
-    surcharge: 0,
-    basePrice: 120000,
-    imageUrl: '/assets/hero-spike-pickleball.png'
-  }
-];
+// FIX-01: Never ship hardcoded fallback courts that mask API failures.
+const DEFAULT_COURTS = [];
+
+function resolveNumericConfig(value, fallback) {
+  if (value === null || value === undefined || typeof value === 'boolean') return fallback;
+  if (typeof value === 'string' && value.trim() === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function isValidVietnamPhone(rawPhone) {
+  const clean = String(rawPhone || '').replace(/[\s.-]/g, '').trim();
+  if (!clean) return false;
+  return /^(0|\+84)[0-9]{8,10}$/.test(clean);
+}
 
 function normalizeCourtAssetUrl(rawUrl, courtType = 'Outdoor') {
   const clean = String(rawUrl || '').trim();
@@ -207,22 +180,31 @@ function sanitizeIconHtml(rawIcon) {
 }
 
 // ================================================================
-// DATE & TIME UTILITIES
+// DATE & TIME UTILITIES — STRICT VIETNAM TIMEZONE (UTC+7 / Asia/Ho_Chi_Minh)
 // ================================================================
+const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+let SERVER_TIME_OFFSET_MS = 0;
+
+function getVietnamNowDate(offsetDays = 0, baseUtcMs = null) {
+  const effectiveUtcMs = (typeof baseUtcMs === 'number' && Number.isFinite(baseUtcMs))
+    ? baseUtcMs
+    : (Date.now() + SERVER_TIME_OFFSET_MS);
+  return new Date(effectiveUtcMs + VIETNAM_UTC_OFFSET_MS + (Number(offsetDays) || 0) * 86400000);
+}
+
 function getTodayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const d = getVietnamNowDate(0);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
 function getOffsetDateStr(offsetDays) {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const d = getVietnamNowDate(Number(offsetDays) || 0);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
@@ -302,9 +284,10 @@ let LAST_SYNC_ERROR = '';
 
 function formatSyncTimeHHMMSS(dateObj) {
   if (!dateObj || !(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return '';
-  const hh = String(dateObj.getHours()).padStart(2, '0');
-  const mm = String(dateObj.getMinutes()).padStart(2, '0');
-  const ss = String(dateObj.getSeconds()).padStart(2, '0');
+  const vn = new Date(dateObj.getTime() + VIETNAM_UTC_OFFSET_MS);
+  const hh = String(vn.getUTCHours()).padStart(2, '0');
+  const mm = String(vn.getUTCMinutes()).padStart(2, '0');
+  const ss = String(vn.getUTCSeconds()).padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
 }
 
@@ -430,8 +413,8 @@ async function retryServerSync() {
 const getTodayISO = getTodayStr;
 const getOffsetDateISO = getOffsetDateStr;
 function getNowMinutes() {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
+  const vn = getVietnamNowDate(0);
+  return vn.getUTCHours() * 60 + vn.getUTCMinutes();
 }
 
 const SpikeDB = {
@@ -476,7 +459,7 @@ function isPendingBookingHoldActive(b) {
   if (b.holdExpiresAtUtc) {
     const expMs = new Date(b.holdExpiresAtUtc).getTime();
     if (!Number.isNaN(expMs)) {
-      return expMs > Date.now();
+      return expMs > (Date.now() + SERVER_TIME_OFFSET_MS);
     }
   }
   return true;
@@ -487,12 +470,12 @@ function getPendingHoldRemainingLabel(b) {
   if (!b.holdExpiresAtUtc) return 'Đang giữ chỗ tạm (chờ duyệt)';
   const expMs = new Date(b.holdExpiresAtUtc).getTime();
   if (Number.isNaN(expMs)) return 'Đang giữ chỗ tạm';
-  const diffSec = Math.floor((expMs - Date.now()) / 1000);
+  const diffSec = Math.floor((expMs - (Date.now() + SERVER_TIME_OFFSET_MS)) / 1000);
   if (diffSec <= 0) return 'Đã hết thời gian giữ chỗ';
   const mins = Math.ceil(diffSec / 60);
-  const expDate = new Date(expMs);
-  const hh = String(expDate.getHours()).padStart(2, '0');
-  const mm = String(expDate.getMinutes()).padStart(2, '0');
+  const expVn = new Date(expMs + VIETNAM_UTC_OFFSET_MS);
+  const hh = String(expVn.getUTCHours()).padStart(2, '0');
+  const mm = String(expVn.getUTCMinutes()).padStart(2, '0');
   return `Giữ chỗ đến ${hh}:${mm} (còn ${mins} phút)`;
 }
 
@@ -592,8 +575,7 @@ function reconcileBookingsRealTime() {
  */
 function reconcileBookingsByRealTime() {
   const todayIso = getTodayStr();
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const nowMins = getNowMinutes();
   let hasChanged = false;
 
   const updateList = list => {
@@ -686,6 +668,13 @@ async function syncDatabaseFromServer(force = false) {
       return false;
     }
 
+    if (data.serverTimeUtc) {
+      const serverUtcMs = Date.parse(data.serverTimeUtc);
+      if (Number.isFinite(serverUtcMs)) {
+        SERVER_TIME_OFFSET_MS = serverUtcMs - Date.now();
+      }
+    }
+
     IS_STAFF_OR_ADMIN = Boolean(data.isStaffOrAdmin);
     if (data.currentUser) {
       SERVER_USER = data.currentUser;
@@ -723,7 +712,7 @@ async function syncDatabaseFromServer(force = false) {
     TODAY_LEDGER_SUMMARY = data.todayLedgerSummary || null;
     if (data.cmsConfig && typeof data.cmsConfig === 'object') {
       CMS_CONFIG = { ...DEFAULT_CMS, ...data.cmsConfig };
-      COURT_PRICE_PER_HOUR = Number(CMS_CONFIG.courtPrice) || 120000;
+      COURT_PRICE_PER_HOUR = resolveNumericConfig(CMS_CONFIG.courtPrice, 120000);
       PRICING_VERSION = CMS_CONFIG.pricingVersion || '';
     }
 
@@ -764,8 +753,21 @@ function saveMenu() {
   window.dispatchEvent(new CustomEvent('pickleball:state-changed'));
 }
 
+const WRITABLE_CMS_KEYS = new Set([
+  'heroTag', 'heroSubtag', 'heroTitle', 'heroSubtitle', 'heroDesc',
+  'courtPrice', 'peakStart', 'peakSurcharge', 'openTime', 'closeTime',
+  'hotline', 'clubTitle', 'clubDesc', 'checkInEarlyMinutes',
+  'cancelCutoffMinutes', 'pendingHoldMinutes', 'maxActivePendingPerActor'
+]);
+
 async function saveCmsConfig(newConfig) {
-  const payload = { ...CMS_CONFIG, ...newConfig };
+  const merged = { ...CMS_CONFIG, ...newConfig };
+  const payload = {};
+  for (const key of WRITABLE_CMS_KEYS) {
+    if (merged[key] !== undefined && merged[key] !== null) {
+      payload[key] = merged[key];
+    }
+  }
   try {
     const res = await apiFetch('/api/admin/cms', {
       method: 'PUT',
@@ -807,8 +809,8 @@ function applyCmsToFooterAndGlobal() {
   document.querySelectorAll('[data-cms="peakStart"]').forEach(el => {
     el.textContent = CMS_CONFIG.peakStart || '17:00';
   });
-  const basePrice = Number(CMS_CONFIG.courtPrice) || 120000;
-  const peakExtra = Number(CMS_CONFIG.peakSurcharge) ?? 30000;
+  const basePrice = resolveNumericConfig(CMS_CONFIG.courtPrice, 120000);
+  const peakExtra = resolveNumericConfig(CMS_CONFIG.peakSurcharge, 30000);
   document.querySelectorAll('[data-cms="courtPriceFormatted"], [data-cms-price="courtPrice"]').forEach(el => {
     el.textContent = formatMoney(basePrice) + '/h';
   });
@@ -818,8 +820,8 @@ function applyCmsToFooterAndGlobal() {
   document.querySelectorAll('[data-cms="peakSurchargeFormatted"]').forEach(el => {
     el.textContent = '+' + formatMoney(peakExtra) + '/h';
   });
-  const vipCourt = COURTS.find(c => Number(c.surcharge) > 0);
-  const vipSurcharge = vipCourt ? Number(vipCourt.surcharge) : 20000;
+  const vipCourt = COURTS.find(c => resolveNumericConfig(c.surcharge, 0) > 0);
+  const vipSurcharge = vipCourt ? resolveNumericConfig(vipCourt.surcharge, 20000) : 20000;
   document.querySelectorAll('[data-cms="vipSurchargeFormatted"]').forEach(el => {
     el.textContent = '+' + formatMoney(vipSurcharge) + '/h';
   });
@@ -855,9 +857,9 @@ function getCourtDisplayName(courtId, fallbackName = '') {
 
 function getCourtHourlyRate(courtId, timeStr) {
   const court = getCourtById(courtId);
-  const base = Number(court?.basePrice) || Number(CMS_CONFIG.courtPrice) || 120000;
-  const surcharge = Number(court?.surcharge) || 0;
-  const peakExtra = isPeakHour(timeStr || '17:00') ? (Number(CMS_CONFIG.peakSurcharge) || 30000) : 0;
+  const base = resolveNumericConfig(court?.basePrice, resolveNumericConfig(CMS_CONFIG.courtPrice, 120000));
+  const surcharge = resolveNumericConfig(court?.surcharge, 0);
+  const peakExtra = isPeakHour(timeStr || '17:00') ? resolveNumericConfig(CMS_CONFIG.peakSurcharge, 30000) : 0;
   return base + surcharge + peakExtra;
 }
 
@@ -866,9 +868,9 @@ function getCourtHourlyRate(courtId, timeStr) {
  */
 function calculateSegmentedPricing(courtId, startTime, durationMins, discountPercent = null) {
   const court = getCourtById(courtId);
-  const base = Number(court?.basePrice) || Number(CMS_CONFIG.courtPrice) || 120000;
-  const surcharge = Number(court?.surcharge) || 0;
-  const peakSurcharge = Number(CMS_CONFIG.peakSurcharge) ?? 30000;
+  const base = resolveNumericConfig(court?.basePrice, resolveNumericConfig(CMS_CONFIG.courtPrice, 120000));
+  const surcharge = resolveNumericConfig(court?.surcharge, 0);
+  const peakSurcharge = resolveNumericConfig(CMS_CONFIG.peakSurcharge, 30000);
   const peakStartMins = timeToMinutes(CMS_CONFIG.peakStart || '17:00') || (17 * 60);
 
   const standardRate = base + surcharge;
@@ -1470,12 +1472,16 @@ const SpikeTicket = {
     }
 
     const svgUrl = getBookingQrSvgUrl(b.id, this.currentAccessToken, 768, this.includeLogo);
+    const useInlineZoomSvg = !this.includeLogo && b.qrSvg && typeof b.qrSvg === 'string' && b.qrSvg.includes('<svg');
+    const zoomQrInner = useInlineZoomSvg
+      ? `<div style="width:min(320px, 72vw);height:min(320px, 72vw);display:flex;align-items:center;justify-content:center;background:#FFFFFF;">${normalizeInlineQrSvg(b.qrSvg)}</div>`
+      : `<img src="${escapeAttr(svgUrl)}" alt="QR ${escapeAttr(b.id)}" style="width:min(320px, 72vw);height:min(320px, 72vw);display:block;background:#FFFFFF;" />`;
     overlay.innerHTML = `
       <div class="modal-dialog" style="background:#FFFFFF;color:#0F172A;padding:28px;border-radius:24px;max-width:440px;width:92vw;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.45);">
         <div style="font-size:0.75rem;font-weight:800;letter-spacing:0.08em;color:#475569;margin-bottom:4px;">CHẾ ĐỘ QUÉT ĐỘ TƯƠNG PHẢN TỐI ĐA</div>
         <div style="font-size:1.35rem;font-weight:900;color:#0F172A;font-family:var(--font-mono);margin-bottom:14px;">${escapeHtml(b.id)}</div>
         <div class="spk-qr-well" style="background:#FFFFFF;padding:16px;border:3px solid #0F172A;border-radius:18px;display:inline-block;">
-          <img src="${escapeAttr(svgUrl)}" alt="QR ${escapeAttr(b.id)}" style="width:min(320px, 72vw);height:min(320px, 72vw);display:block;background:#FFFFFF;" />
+          ${zoomQrInner}
         </div>
         <div style="margin-top:14px;font-size:0.88rem;font-weight:600;color:#334155;">
           ${escapeHtml(getCourtDisplayName(b.courtId, b.courtName))} · ${escapeHtml(b.time || '')} (${escapeHtml(formatDateVN(b.date))})
@@ -1778,7 +1784,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
-      if (e.target === overlay) overlay.classList.remove('open');
+      if (e.target === overlay) {
+        if (overlay.id) {
+          closeModal(overlay.id);
+        } else {
+          overlay.classList.remove('open');
+        }
+      }
     });
   });
 
@@ -1787,6 +1799,144 @@ document.addEventListener('DOMContentLoaded', () => {
     const nameInput = document.getElementById('bookingName');
     const phoneInput = document.getElementById('bookingPhone');
     if (nameInput && !nameInput.value && user.name) nameInput.value = user.name;
-    if (phoneInput && !phoneInput.value && user.phone) phoneInput.value = user.phone;
+    if (phoneInput && !phoneInput.value && user.phone) phoneInput.value = phoneInput.value || user.phone;
+  }
+});
+
+// ================================================================
+// SHADCN-ADMIN SHELL, COLLAPSIBLE SIDEBAR, COMMAND MENU & THEME V7
+// ================================================================
+function toggleAdminSidebar() {
+  const shell = document.getElementById('shAdminShell');
+  const toggleBtn = document.getElementById('shSidebarToggleBtn');
+  const sidebar = document.getElementById('shAdminSidebar');
+  if (!shell) return;
+
+  if (window.innerWidth < 1024) {
+    const isOpen = shell.getAttribute('data-sidebar-mobile-open') === 'true';
+    const nextOpen = !isOpen;
+    shell.setAttribute('data-sidebar-mobile-open', nextOpen ? 'true' : 'false');
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+    if (nextOpen && sidebar) {
+      const firstLink = sidebar.querySelector('a, button');
+      if (firstLink) setTimeout(() => firstLink.focus(), 40);
+    } else if (!nextOpen && toggleBtn) {
+      try { toggleBtn.focus(); } catch (_) {}
+    }
+  } else {
+    const isCollapsed = shell.getAttribute('data-sidebar-collapsed') === 'true';
+    const nextState = !isCollapsed;
+    shell.setAttribute('data-sidebar-collapsed', nextState ? 'true' : 'false');
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', nextState ? 'false' : 'true');
+    try {
+      localStorage.setItem('spike_sidebar_collapsed', nextState ? 'true' : 'false');
+    } catch (_) {}
+  }
+}
+
+function closeMobileAdminSidebar() {
+  const shell = document.getElementById('shAdminShell');
+  const toggleBtn = document.getElementById('shSidebarToggleBtn');
+  if (shell) {
+    shell.setAttribute('data-sidebar-mobile-open', 'false');
+  }
+  if (toggleBtn && window.innerWidth < 1024) {
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    try { toggleBtn.focus(); } catch (_) {}
+  }
+}
+
+function toggleSpikeTheme(explicitTheme) {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme') || 'light';
+  const next = explicitTheme === 'dark' || explicitTheme === 'light'
+    ? explicitTheme
+    : (current === 'dark' ? 'light' : 'dark');
+
+  root.setAttribute('data-theme', next);
+  root.classList.toggle('dark', next === 'dark');
+  try {
+    localStorage.setItem('spike_theme', next);
+  } catch (_) {}
+  return next;
+}
+
+function openCommandPalette() {
+  const modal = document.getElementById('shCommandModal');
+  if (!modal) return;
+  openModal('shCommandModal');
+  const input = document.getElementById('shCommandSearchInput');
+  if (input) {
+    input.value = '';
+    filterCommandPalette('');
+    setTimeout(() => input.focus(), 40);
+  }
+}
+
+function filterCommandPalette(query) {
+  const list = document.getElementById('shCommandList');
+  if (!list) return;
+  const kw = String(query || '').trim().toLowerCase();
+  const items = list.querySelectorAll('.sh-cmd-item');
+  items.forEach(item => {
+    const text = (item.textContent || '').toLowerCase();
+    const extra = (item.getAttribute('data-cmd-keywords') || '').toLowerCase();
+    const match = !kw || text.includes(kw) || extra.includes(kw);
+    item.style.display = match ? 'flex' : 'none';
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    const cmdModal = document.getElementById('shCommandModal');
+    if (cmdModal) {
+      e.preventDefault();
+      if (cmdModal.classList.contains('open')) {
+        closeModal('shCommandModal');
+      } else {
+        openCommandPalette();
+      }
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+    const shell = document.getElementById('shAdminShell');
+    if (shell) {
+      e.preventDefault();
+      toggleAdminSidebar();
+    }
+  } else if (e.key === 'Escape') {
+    const shell = document.getElementById('shAdminShell');
+    if (shell && shell.getAttribute('data-sidebar-mobile-open') === 'true') {
+      closeMobileAdminSidebar();
+    }
+  } else if (e.key === 'Tab') {
+    const shell = document.getElementById('shAdminShell');
+    const sidebar = document.getElementById('shAdminSidebar');
+    if (shell && sidebar && window.innerWidth < 1024 && shell.getAttribute('data-sidebar-mobile-open') === 'true') {
+      const focusables = getFocusableModalElements(sidebar);
+      if (focusables.length > 0) {
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && (document.activeElement === first || !sidebar.contains(document.activeElement))) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (document.activeElement === last || !sidebar.contains(document.activeElement))) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const sidebar = document.getElementById('shAdminSidebar');
+  if (sidebar) {
+    sidebar.querySelectorAll('.sh-nav-item').forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth < 1024) {
+          closeMobileAdminSidebar();
+        }
+      });
+    });
   }
 });

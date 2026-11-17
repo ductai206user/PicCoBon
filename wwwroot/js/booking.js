@@ -105,9 +105,64 @@ function getAvailableTimeSlots(courtId = selectedCourtId, dateStr = selectedDate
   return allSlots.filter(t => isSlotAvailable(courtId, dateStr, t, durationMins));
 }
 
+function normalizeServerQuotePayload(q) {
+  if (!q || typeof q !== 'object') return null;
+  const standardRate = resolveNumericConfig(q.standardHourlyRate, resolveNumericConfig(q.standardRate, 120000));
+  const peakRate = resolveNumericConfig(q.peakHourlyRate, resolveNumericConfig(q.peakRate, standardRate));
+  const normalMinutes = resolveNumericConfig(q.standardMinutes, resolveNumericConfig(q.normalMinutes, 0));
+  const peakMinutes = resolveNumericConfig(q.peakMinutes, 0);
+
+  let normalSubtotal = resolveNumericConfig(q.normalAmount, null);
+  let peakSubtotal = resolveNumericConfig(q.peakAmount, null);
+  if ((normalSubtotal === null || peakSubtotal === null) && Array.isArray(q.segments)) {
+    const stdSeg = q.segments.find(s => String(s.label || '').toLowerCase().includes('tiêu chuẩn') || Number(s.hourlyRate) === standardRate);
+    const pkSeg = q.segments.find(s => String(s.label || '').toLowerCase().includes('vàng'));
+    if (normalSubtotal === null) normalSubtotal = stdSeg ? Number(stdSeg.subtotal) || 0 : Math.round(normalMinutes * (standardRate / 60));
+    if (peakSubtotal === null) peakSubtotal = pkSeg ? Number(pkSeg.subtotal) || 0 : Math.round(peakMinutes * (peakRate / 60));
+  }
+  if (normalSubtotal === null) normalSubtotal = Math.round(normalMinutes * (standardRate / 60));
+  if (peakSubtotal === null) peakSubtotal = Math.round(peakMinutes * (peakRate / 60));
+
+  const grossCourtFee = resolveNumericConfig(q.courtFeeBeforeDiscount, resolveNumericConfig(q.courtFee, normalSubtotal + peakSubtotal));
+  const discountPercent = resolveNumericConfig(q.discountPercent, 0);
+  const discountAmount = resolveNumericConfig(q.discountAmount, 0);
+  const netCourtFee = resolveNumericConfig(q.amountDue, Math.max(0, grossCourtFee - discountAmount));
+
+  return {
+    standardRate,
+    peakRate,
+    normalMinutes,
+    peakMinutes,
+    normalSubtotal,
+    peakSubtotal,
+    grossCourtFee,
+    discountPercent,
+    discountAmount,
+    netCourtFee,
+    memberTier: q.memberTier || 'Khách tiêu chuẩn',
+    isServerVerified: true
+  };
+}
+
 function makeQuoteKey(courtId = selectedCourtId, dateStr = selectedDate, timeStr = selectedStartTime, durationMins = selectedDuration) {
   if (!courtId || !dateStr || !timeStr || !durationMins) return '';
-  return `${Number(courtId)}|${dateStr}|${timeStr}|${Number(durationMins)}`;
+  return `${Number(courtId)}|${dateStr}|${timeStr}|${Number(durationMins)}|${PRICING_VERSION || ''}`;
+}
+
+function syncBookingUrlState() {
+  if (typeof window === 'undefined' || !window.history || typeof window.history.replaceState !== 'function') return;
+  try {
+    const url = new URL(window.location.href);
+    if (selectedCourtId) url.searchParams.set('court', String(Number(selectedCourtId)));
+    if (selectedDate) url.searchParams.set('date', selectedDate);
+    if (selectedStartTime) {
+      url.searchParams.set('time', selectedStartTime);
+    } else {
+      url.searchParams.delete('time');
+    }
+    if (selectedDuration) url.searchParams.set('duration', String(Number(selectedDuration)));
+    window.history.replaceState({}, '', url.toString());
+  } catch (_) {}
 }
 
 function invalidateServerQuote() {
@@ -307,6 +362,7 @@ function selectBookingDate(dateStr) {
 
   invalidateServerQuote();
   ensureValidSelectedTime();
+  syncBookingUrlState();
   renderDateStrip();
   renderCourtOptions();
   renderTimeline();
@@ -351,8 +407,8 @@ function renderCourtOptions() {
       (b.status !== 'pending' || isPendingBookingHoldActive(b))
     ).length;
 
-    const stdRate = (Number(court.basePrice) || Number(CMS_CONFIG.courtPrice) || 120000) + (Number(court.surcharge) || 0);
-    const peakRate = stdRate + (Number(CMS_CONFIG.peakSurcharge) ?? 30000);
+    const stdRate = resolveNumericConfig(court.basePrice, resolveNumericConfig(CMS_CONFIG.courtPrice, 120000)) + resolveNumericConfig(court.surcharge, 0);
+    const peakRate = stdRate + resolveNumericConfig(CMS_CONFIG.peakSurcharge, 30000);
     const cleanSurface = String(court.surface || 'Acrylic Cushion 8 lớp').replace(/USAPA\s*/gi, '');
     const slotStatusHtml = freeSlotsCount > 0
       ? `<span class="text-xs font-semibold" style="color:var(--color-success)">Còn ${freeSlotsCount} khung giờ trống</span>`
@@ -389,6 +445,7 @@ function selectCourt(courtId) {
   selectedCourtId = Number(target.id);
   invalidateServerQuote();
   ensureValidSelectedTime();
+  syncBookingUrlState();
   renderCourtOptions();
   renderTimeline();
   renderTimeSlotGrid();
@@ -408,6 +465,7 @@ function setDuration(dur) {
   selectedDuration = Number(dur) || 60;
   invalidateServerQuote();
   ensureValidSelectedTime();
+  syncBookingUrlState();
   renderDurationPills();
   renderCourtOptions();
   renderTimeline();
@@ -456,7 +514,7 @@ function renderTimeline() {
     }
 
     const canPick = (m + selectedDuration <= closeMins) && !check.conflict && !isPast;
-    slots.push(`<div class="timeline-seg ${cls}" title="${escapeAttr(title)}" ${canPick ? `onclick="selectStartTime('${t}')"` : ''}></div>`);
+    slots.push(`<div class="timeline-seg ${cls}" title="${escapeAttr(title)}" ${canPick ? `role="button" tabindex="0" aria-label="${escapeAttr(title)}" onclick="selectStartTime('${t}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectStartTime('${t}');}"` : ''}></div>`);
   }
 
   bar.innerHTML = slots.join('');
@@ -612,6 +670,7 @@ function selectStartTime(time) {
   }
   selectedStartTime = time;
   invalidateServerQuote();
+  syncBookingUrlState();
   renderTimeSlotGrid();
   updatePriceBreakdown(true);
 }
@@ -794,27 +853,14 @@ async function fetchServerQuote(reqId) {
       return;
     }
 
-    latestServerQuote = data.quote;
-    latestQuoteKey = expectedKey;
-    quoteStatus = 'ready';
     if (data.quote.pricingVersion) {
       PRICING_VERSION = data.quote.pricingVersion;
     }
+    latestServerQuote = data.quote;
+    latestQuoteKey = makeQuoteKey(selectedCourtId, selectedDate, selectedStartTime, selectedDuration);
+    quoteStatus = 'ready';
 
-    applyQuoteToDom({
-      standardRate: data.quote.standardRate,
-      peakRate: data.quote.peakRate,
-      normalMinutes: data.quote.normalMinutes,
-      peakMinutes: data.quote.peakMinutes,
-      normalSubtotal: data.quote.normalAmount,
-      peakSubtotal: data.quote.peakAmount,
-      grossCourtFee: data.quote.courtFee,
-      discountPercent: data.quote.discountPercent,
-      discountAmount: data.quote.discountAmount,
-      netCourtFee: data.quote.amountDue,
-      memberTier: data.quote.memberTier || 'Khách tiêu chuẩn',
-      isServerVerified: true
-    });
+    applyQuoteToDom(normalizeServerQuotePayload(data.quote));
     updateQuoteBadgeDom();
     syncSubmitButtonState();
   } catch (err) {
@@ -996,6 +1042,30 @@ async function submitBooking() {
     return;
   }
 
+  // FIX-09: Chặn triệt để đặt giờ quá khứ hoặc vượt giờ đóng cửa lúc submit
+  const dateCheck = validateAndNormalizeBookingDate(selectedDate);
+  if (!dateCheck.valid) {
+    showToast('Ngày đặt không hợp lệ!', dateCheck.reason || 'Vui lòng chọn ngày thi đấu hợp lệ.', 'warning');
+    return;
+  }
+
+  const todayStr = getTodayStr();
+  const startMins = timeToMinutes(selectedStartTime);
+  if (selectedDate === todayStr && startMins < (getNowMinutes() - 5)) {
+    showToast('Khung giờ đã qua!', 'Khung giờ bạn chọn đã trôi qua theo giờ Việt Nam. Vui lòng chọn khung giờ khác.', 'warning');
+    ensureValidSelectedTime();
+    renderTimeSlotGrid();
+    updatePriceBreakdown(true);
+    return;
+  }
+
+  const openStr = CMS_CONFIG.openTime || '06:00';
+  const closeStr = CMS_CONFIG.closeTime || '22:00';
+  if (startMins < timeToMinutes(openStr) || (startMins + Number(selectedDuration || 60)) > timeToMinutes(closeStr)) {
+    showToast('Ngoài khung giờ hoạt động!', `Khung giờ thi đấu phải nằm trong giờ mở cửa CLB (${openStr} – ${closeStr}).`, 'warning');
+    return;
+  }
+
   const name = document.getElementById('bookingName')?.value.trim();
   const phone = document.getElementById('bookingPhone')?.value.trim();
   const players = parseInt(document.getElementById('bookingPlayers')?.value || '4', 10);
@@ -1007,7 +1077,7 @@ async function submitBooking() {
     return;
   }
 
-  if (!phone || !/^(0|\+84)[0-9]{8,10}$/.test(phone.replace(/[\s.-]/g, ''))) {
+  if (!isValidVietnamPhone(phone)) {
     showToast('Số điện thoại chưa hợp lệ!', 'Vui lòng nhập đúng số điện thoại 10 chữ số Việt Nam.', 'error');
     document.getElementById('bookingPhone')?.focus();
     return;
@@ -1056,26 +1126,13 @@ async function submitBooking() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
       if (data && data.latestQuote) {
-        latestServerQuote = data.latestQuote;
-        latestQuoteKey = currentKey;
-        quoteStatus = 'ready';
         if (data.latestQuote.pricingVersion) {
           PRICING_VERSION = data.latestQuote.pricingVersion;
         }
-        applyQuoteToDom({
-          standardRate: data.latestQuote.standardRate,
-          peakRate: data.latestQuote.peakRate,
-          normalMinutes: data.latestQuote.normalMinutes,
-          peakMinutes: data.latestQuote.peakMinutes,
-          normalSubtotal: data.latestQuote.normalAmount,
-          peakSubtotal: data.latestQuote.peakAmount,
-          grossCourtFee: data.latestQuote.courtFee,
-          discountPercent: data.latestQuote.discountPercent,
-          discountAmount: data.latestQuote.discountAmount,
-          netCourtFee: data.latestQuote.amountDue,
-          memberTier: data.latestQuote.memberTier || 'Khách tiêu chuẩn',
-          isServerVerified: true
-        });
+        latestServerQuote = data.latestQuote;
+        latestQuoteKey = makeQuoteKey(selectedCourtId, selectedDate, selectedStartTime, selectedDuration);
+        quoteStatus = 'ready';
+        applyQuoteToDom(normalizeServerQuotePayload(data.latestQuote));
         showToast('Bảng giá vừa được cập nhật!', `${data.error || 'Giá sân vừa thay đổi.'} Vui lòng kiểm tra tổng tiền mới (${formatMoney(data.latestQuote.amountDue)}) và bấm Xác nhận lại.`, 'warning');
         return;
       }
@@ -1143,8 +1200,18 @@ async function submitBooking() {
     const paidAmount = Number(createdBooking.paidAmount || 0);
     const remainingDue = Math.max(0, amountDue - paidAmount);
 
+    const isApproved = createdBooking.status === 'approved';
+    const modalTitleEl = document.getElementById('bookingModalTitle');
+    if (modalTitleEl) {
+      modalTitleEl.textContent = isApproved
+        ? 'Vé Sân Điện Tử · Đặt Sân Thành Công'
+        : 'Vé Sân Điện Tử · Đã Tiếp Nhận — Chờ Duyệt';
+    }
+
     setEl('qrRef', createdBooking.id);
-    setEl('qrStatusText', createdBooking.status === 'approved' ? 'Đã duyệt · Sẵn sàng Check-in đúng giờ' : 'Chờ lễ tân duyệt vé');
+    setEl('qrStatusText', isApproved
+      ? 'Đã duyệt · Sẵn sàng Check-in đúng giờ'
+      : `Chờ lễ tân duyệt · ${getPendingHoldRemainingLabel(createdBooking)}`);
     setEl('qrName', `${createdBooking.name} (${createdBooking.phone})`);
     setEl('qrDate', formatDateVN(createdBooking.date));
     setEl('qrCourt', bookedCourtName);
@@ -1152,7 +1219,13 @@ async function submitBooking() {
     setEl('qrTotal', `Phải TT: ${formatMoney(amountDue)} · Đã TT: ${formatMoney(paidAmount)} · Còn lại: ${formatMoney(remainingDue)}`);
 
     openModal('modalQR');
-    showToast('Đặt sân thành công!', `Mã vé điện tử của bạn là ${createdBooking.id}`);
+    showToast(
+      isApproved ? 'Đặt sân thành công!' : 'Đã tiếp nhận yêu cầu đặt sân!',
+      isApproved
+        ? `Mã vé điện tử đã duyệt của bạn là ${createdBooking.id}.`
+        : `Mã giữ chỗ ${createdBooking.id} đã được tạo — ${getPendingHoldRemainingLabel(createdBooking)}.`,
+      isApproved ? 'success' : 'info'
+    );
   } catch (err) {
     showToast('Lỗi kết nối!', 'Không thể gửi yêu cầu đặt sân tới máy chủ.', 'error');
   } finally {

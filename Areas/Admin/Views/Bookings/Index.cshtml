@@ -30,13 +30,13 @@
 
             @if (!string.IsNullOrEmpty(msgSuccess))
             {
-                <div class="card" style="background:#ECFDF5;border-color:#A7F3D0;padding:0.9rem 1.2rem;margin-bottom:1.2rem;color:#065F46;font-weight:600;word-break:break-word;">
+                <div class="sh-alert-success">
                     ✓ @msgSuccess
                 </div>
             }
             @if (!string.IsNullOrEmpty(msgError))
             {
-                <div class="card" style="background:#FEF2F2;border-color:#FECACA;padding:0.9rem 1.2rem;margin-bottom:1.2rem;color:#991B1B;font-weight:600;">
+                <div class="sh-alert-danger">
                     ⚠ @msgError
                 </div>
             }

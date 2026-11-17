@@ -31,7 +31,27 @@
             grid-template-columns: minmax(0, 1fr);
         }
     }
+    @@media (max-width: 480px) {
+        .member-passport-banner {
+            padding: 0.75rem 1rem;
+            height: auto;
+            min-height: 76px;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+        }
+        .member-passport-body {
+            padding: 0 1rem 1.25rem;
+        }
+        .member-sub {
+            overflow-wrap: anywhere;
+        }
+        .profile-tab-btn {
+            padding: 0.6rem 0.75rem;
+            font-size: 0.8rem;
+        }
+    }
     .member-passport {
+        max-width: 100%;
         background: linear-gradient(155deg, #0A0E17 0%, #162038 100%);
         border-radius: 18px;
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -222,12 +242,13 @@
         margin-top: 0.45rem;
     }
     .paddle-chip {
+        font-family: inherit;
         font-size: 0.74rem;
         padding: 0.22rem 0.6rem;
         border-radius: 999px;
-        background: #F1F5F9;
-        color: #475569;
-        border: 1px solid #E2E8F0;
+        background: var(--bg-subtle);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
         cursor: pointer;
         transition: all 0.15s ease;
     }
@@ -262,15 +283,15 @@
     <div class="container">
         @if (TempData["ProfileSuccess"] != null)
         {
-            <div style="background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;padding:0.95rem 1.25rem;border-radius:12px;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.65rem;font-weight:600;font-size:0.9rem;">
-                <iconify-icon icon="lucide:check-circle-2" width="20" style="color:#059669;flex-shrink:0;"></iconify-icon>
+            <div class="sh-alert-success" style="display:flex;align-items:center;gap:0.65rem;">
+                <iconify-icon icon="lucide:check-circle-2" width="20" style="color:var(--color-success);flex-shrink:0;"></iconify-icon>
                 <span>@TempData["ProfileSuccess"]</span>
             </div>
         }
         @if (TempData["ProfileError"] != null)
         {
-            <div style="background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:0.95rem 1.25rem;border-radius:12px;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.65rem;font-weight:600;font-size:0.9rem;">
-                <iconify-icon icon="lucide:alert-circle" width="20" style="color:#DC2626;flex-shrink:0;"></iconify-icon>
+            <div class="sh-alert-danger" style="display:flex;align-items:center;gap:0.65rem;">
+                <iconify-icon icon="lucide:alert-circle" width="20" style="color:var(--color-danger);flex-shrink:0;"></iconify-icon>
                 <span>@TempData["ProfileError"]</span>
             </div>
         }
@@ -498,10 +519,10 @@
                                         <label class="form-label" for="profPaddle">Dòng vợt Pickleball đang sử dụng</label>
                                         <input type="text" id="profPaddle" name="paddleBrand" class="form-input" value="@Model.PaddleBrand" placeholder="VD: Joola Perseus 16mm Carbon" oninput="document.getElementById('livePaddlePreview').textContent = this.value || 'Chưa cập nhật'">
                                         <div class="paddle-chips">
-                                            <span class="paddle-chip" onclick="setPaddleBrand('Joola Perseus 16mm')">Joola Perseus 16mm</span>
-                                            <span class="paddle-chip" onclick="setPaddleBrand('Selkirk Vanguard Control')">Selkirk Vanguard</span>
-                                            <span class="paddle-chip" onclick="setPaddleBrand('Six Zero DBD 16mm')">Six Zero DBD 16mm</span>
-                                            <span class="paddle-chip" onclick="setPaddleBrand('CRBN 1X Power')">CRBN 1X Power</span>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('Joola Perseus 16mm')">Joola Perseus 16mm</button>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('Selkirk Vanguard Control')">Selkirk Vanguard</button>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('Six Zero DBD 16mm')">Six Zero DBD 16mm</button>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('CRBN 1X Power')">CRBN 1X Power</button>
                                         </div>
                                     </div>
 

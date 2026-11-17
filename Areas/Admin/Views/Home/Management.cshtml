@@ -29,9 +29,9 @@
         <div class="stack">
           <!-- 1. Đơn chờ duyệt -->
           <div class="card">
-            <div class="card-header" style="background:var(--color-warning-light);">
-              <span class="card-header-title" style="color:#92400E">
-                <span class="badge-dot" style="background:var(--color-warning)"></span>
+            <div class="card-header sh-card-header-pending">
+              <span class="card-header-title">
+                <span class="badge-dot" style="background:currentColor"></span>
                 <span>Yêu cầu đặt sân chờ duyệt (<span id="pendingCount">0</span>)</span>
               </span>
               <button class="btn btn-sm btn-success" id="approveAllBtn" onclick="approveAllPending()" style="display:none">
@@ -63,17 +63,28 @@
             </div>
           </div>
 
-          <!-- 3. Đơn hàng lẻ Pro Shop (P1-15) -->
+          <!-- 3. Đơn hàng Pro Shop (P1-15, FIX-04, FIX-14) -->
           <div class="card">
             <div class="card-header">
               <span class="card-header-title">
                 <iconify-icon icon="lucide:shopping-bag" width="18" style="color:var(--color-primary)"></iconify-icon>
-                <span>Đơn Hàng Lẻ Pro Shop (<span id="standaloneOrdersCount">0</span>)</span>
+                <span>Đơn Hàng Pro Shop (<span id="standaloneOrdersCount">0</span>)</span>
               </span>
-              <span class="badge badge-neutral">Không gộp sân · Đối soát riêng</span>
+              <span class="badge badge-neutral">Giao đồ &amp; Đối soát Sổ cái</span>
+            </div>
+            <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border-light);display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <input type="search" id="shopOrderSearch" class="form-input text-sm" style="flex:1;min-width:180px;" placeholder="Tìm mã đơn, tên khách, SĐT, mã sân..." oninput="handleShopOrderFilterChange()" aria-label="Tìm kiếm đơn hàng Pro Shop">
+              <select id="shopOrderFilter" class="form-select text-sm" style="width:auto;min-width:165px;" onchange="handleShopOrderFilterChange()" aria-label="Lọc trạng thái đơn hàng Pro Shop">
+                <option value="all">Tất cả đơn hàng</option>
+                <option value="pending_fulfill">Chờ giao đồ</option>
+                <option value="delivered">Đã giao đồ</option>
+                <option value="unpaid">Chưa thu đủ</option>
+                <option value="cancelled">Đã hủy</option>
+              </select>
             </div>
             <div class="card-body" style="padding:0">
               <div id="standaloneOrdersList"></div>
+              <div id="shopOrdersPagination" style="padding:0.75rem 1rem;border-top:1px solid var(--border-light);display:none;"></div>
             </div>
           </div>
         </div>
@@ -99,23 +110,24 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label" for="lockStart">Từ giờ:</label>
-                  <select class="form-select" id="lockStart"></select>
+                  <select class="form-select" id="lockStart" onchange="onLockWindowChange()"></select>
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="lockDuration">Thời lượng:</label>
-                  <select class="form-select" id="lockDuration">
+                  <select class="form-select" id="lockDuration" onchange="onLockDurationChange()">
                     <option value="60">1 tiếng (60p)</option>
                     <option value="120">2 tiếng (120p)</option>
                     <option value="240">4 tiếng (240p)</option>
-                    <option value="960">Cả ngày (16h)</option>
+                    <option value="full_day" id="lockDurationFullDayOption">Cả ngày hoạt động</option>
                   </select>
                 </div>
               </div>
+              <div class="text-xs text-muted" id="lockWindowPreview" style="margin-top:-0.25rem;"></div>
               <div class="form-group">
                 <label class="form-label" for="lockReason">Lý do khóa sân:</label>
                 <input class="form-input" type="text" id="lockReason" value="Bảo dưỡng mặt sân & lưới">
               </div>
-              <button class="btn btn-danger btn-block" onclick="lockCourt()">
+              <button type="button" class="btn btn-danger btn-block" id="btnCreateCourtLock" onclick="lockCourt()">
                 <iconify-icon icon="lucide:lock" width="16"></iconify-icon>
                 <span>Áp dụng khóa sân</span>
               </button>
@@ -225,8 +237,17 @@
       <div class="modal-body stack-sm">
         <div class="payment-summary" id="ledgerSummaryBox"></div>
 
+        <div id="ledgerPartialFailureBanner" style="display:none;padding:0.75rem;border-radius:var(--radius-sm);border:1px solid #F59E0B;background:rgba(245,158,11,0.12);margin-bottom:0.75rem;" role="alert">
+          <div class="text-xs font-bold" style="color:#B45309;">Đã ghi sổ thu tiền thành công, nhưng chưa thể đóng ca sân!</div>
+          <div class="text-xs text-muted" style="margin-top:0.25rem;" id="ledgerPartialFailureDetail"></div>
+          <button type="button" class="btn btn-warning btn-sm" id="btnRetryLedgerFinishOnly" style="margin-top:0.5rem;" onclick="retryLedgerFinishOnly()">
+            <iconify-icon icon="lucide:flag" width="14"></iconify-icon>
+            <span>Chỉ thử Đóng ca lại (KHÔNG thu tiền lại)</span>
+          </button>
+        </div>
+
         <!-- Ghi nhận thu tiền -->
-        <div id="ledgerCollectSection" style="padding:0.85rem;background:#F8FAFC;border:1px solid var(--border-color);border-radius:var(--radius-sm);">
+        <div id="ledgerCollectSection" class="sh-subtle-panel">
           <div class="font-bold text-sm mb-sm" style="color:var(--color-primary);">Ghi nhận bút toán Thu tiền (Payment Ledger)</div>
           <div class="form-row">
             <div class="form-group" style="margin-bottom:0.5rem;">
@@ -262,8 +283,8 @@
         </div>
 
         <!-- Hoàn tiền (Refund) khi đã thu > 0 -->
-        <details id="ledgerRefundDetails" style="display:none;padding:0.75rem;background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--radius-sm);">
-          <summary style="cursor:pointer;font-weight:700;font-size:0.82rem;color:#B91C1C;">
+        <details id="ledgerRefundDetails" class="sh-refund-panel" style="display:none;">
+          <summary style="cursor:pointer;font-weight:700;font-size:0.82rem;">
             Tạo bút toán Hoàn tiền (Refund) cho khách
           </summary>
           <div style="margin-top:0.65rem;" class="stack-sm">

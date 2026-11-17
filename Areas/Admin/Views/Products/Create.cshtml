@@ -16,8 +16,9 @@
                     <small class="text-muted">Tải ảnh sản phẩm chất lượng cao (PNG, JPG, WebP) để hiển thị trên Pro Shop &amp; POS.</small>
                 </div>
                 <div class="col-sm-6 text-sm-right mt-2 mt-sm-0">
-                    <a asp-action="Index" class="btn btn-outline-secondary">
-                        <i class="fas fa-arrow-left mr-1"></i> Quay lại danh sách
+                    <a asp-action="Index" class="btn btn-outline btn-sm">
+                        <iconify-icon icon="lucide:arrow-left" width="15"></iconify-icon>
+                        <span>Quay lại danh sách</span>
                     </a>
                 </div>
             </div>
@@ -76,10 +77,10 @@
                                 </div>
 
                                 <div class="form-group mb-0">
-                                    <div class="custom-control custom-switch">
-                                        <input type="checkbox" class="custom-control-input" asp-for="IsActive" id="switchIsActive" />
-                                        <label class="custom-control-label font-weight-bold" for="switchIsActive">Hiển thị mở bán trên Pro Shop &amp; POS</label>
-                                    </div>
+                                    <label class="d-flex align-items-center font-weight-bold mb-0" style="gap:8px;cursor:pointer;" for="switchIsActive">
+                                        <input type="checkbox" asp-for="IsActive" id="switchIsActive" />
+                                        <span>Hiển thị mở bán trên Pro Shop &amp; POS</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -107,11 +108,11 @@
                                 </div>
 
                                 <div id="productImageDropzone"
+                                     class="sh-upload-dropzone"
                                      tabindex="0"
                                      role="button"
-                                     aria-label="Kéo thả ảnh sản phẩm vào đây hoặc bấm để chọn file"
-                                     style="border:2px dashed #94A3B8;border-radius:12px;padding:18px 14px;text-align:center;background:#F8FAFC;cursor:pointer;transition:all 0.2s ease;">
-                                    <i class="fas fa-cloud-upload-alt fa-2x text-primary mb-2"></i>
+                                     aria-label="Kéo thả ảnh sản phẩm vào đây hoặc bấm để chọn file">
+                                    <iconify-icon icon="lucide:upload-cloud" width="28" style="color:var(--color-primary);margin-bottom:6px;"></iconify-icon>
                                     <div class="font-weight-bold text-dark">Kéo &amp; thả ảnh vào đây hoặc <span class="text-primary" style="text-decoration:underline;">bấm chọn file</span></div>
                                     <div class="small text-muted mt-1">
                                         Hỗ trợ <strong>PNG, JPG/JPEG, WebP</strong> · Tối đa <strong>5 MB</strong> · Khuyến nghị tỷ lệ <strong>1:1</strong> (tối thiểu 400×400px)
@@ -127,18 +128,19 @@
                                 <span asp-validation-for="ImageFile" id="productImageClientError" class="text-danger small font-weight-bold d-block mt-2"></span>
 
                                 <div class="d-flex justify-content-between align-items-center mt-3">
-                                    <button type="button" class="btn btn-sm btn-outline-primary" id="btnChooseImageFile">
-                                        <i class="fas fa-folder-open mr-1"></i> Chọn ảnh từ máy
+                                    <button type="button" class="btn btn-sm btn-outline" id="btnChooseImageFile">
+                                        <iconify-icon icon="lucide:folder-open" width="14"></iconify-icon> Chọn ảnh từ máy
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="btnClearSelectedImage">
-                                        <i class="fas fa-undo mr-1"></i> Bỏ ảnh vừa chọn
+                                    <button type="button" class="btn btn-sm btn-outline d-none" id="btnClearSelectedImage">
+                                        <iconify-icon icon="lucide:undo-2" width="14"></iconify-icon> Bỏ ảnh vừa chọn
                                     </button>
                                 </div>
                             </div>
                             <div class="card-footer bg-white d-flex justify-content-end" style="gap: 8px;">
-                                <a asp-action="Index" class="btn btn-secondary">Hủy</a>
+                                <a asp-action="Index" class="btn btn-outline">Hủy</a>
                                 <button type="submit" class="btn btn-primary font-weight-bold" data-testid="admin-product-submit">
-                                    <i class="fas fa-save mr-1"></i> Lưu sản phẩm
+                                    <iconify-icon icon="lucide:save" width="15"></iconify-icon>
+                                    <span>Lưu sản phẩm</span>
                                 </button>
                             </div>
                         </div>
@@ -227,8 +229,7 @@
                 dropzone.addEventListener(evt, (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    dropzone.style.borderColor = '#007BFF';
-                    dropzone.style.background = '#EFF6FF';
+                    dropzone.classList.add('is-dragover');
                 });
             });
 
@@ -236,8 +237,7 @@
                 dropzone.addEventListener(evt, (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    dropzone.style.borderColor = '#94A3B8';
-                    dropzone.style.background = '#F8FAFC';
+                    dropzone.classList.remove('is-dragover');
                 });
             });
 

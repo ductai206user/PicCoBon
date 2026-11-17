@@ -1,7 +1,20 @@
+@using Microsoft.EntityFrameworkCore
+@inject PickleballClub.Services.ClubSettingsService ClubSettingsService
+@inject PickleballClub.Models.PickleballContext SsrDb
 @{
     ViewData["Title"] = "Spike Pickleball Club — Tổ Hợp Sân Pickleball Chuyên Nghiệp";
     var initialCourts = ViewBag.Courts as ICollection<PickleballClub.Models.TbCourt>;
-    int initialCourtCount = initialCourts?.Count ?? 4;
+    int initialCourtCount = initialCourts?.Count ?? await SsrDb.TbCourts.AsNoTracking().CountAsync(c => c.IsActive);
+    var ssrSettings = await ClubSettingsService.GetSettingsAsync(SsrDb);
+    var vndFmt = new System.Globalization.NumberFormatInfo { NumberGroupSeparator = "." };
+    string ssrStdPriceNum = ssrSettings.BaseCourtPrice.ToString("#,0", vndFmt);
+    string ssrPeakTotalNum = (ssrSettings.BaseCourtPrice + ssrSettings.PeakSurchargePerHour).ToString("#,0", vndFmt);
+    string ssrClubTitle = ssrSettings.RawCms.TryGetValue("clubTitle", out var ctVal) && !string.IsNullOrWhiteSpace(ctVal)
+        ? ctVal
+        : "Đặc Quyền Hội Viên CLB";
+    string ssrClubDesc = ssrSettings.RawCms.TryGetValue("clubDesc", out var cdVal) && !string.IsNullOrWhiteSpace(cdVal)
+        ? cdVal
+        : "Đăng ký tài khoản hội viên chính thức để tích lũy chi tiêu thực thu và tự động nâng hạng thẻ Bạc (-5%), Vàng (-10%), VIP Kim Cương (-15%).";
 }
 
 <!-- HERO BANNER -->
@@ -35,7 +48,7 @@
             <div class="hero-live-panel">
                 <div class="hero-live-header">
                     <span class="live-pulse-tag" id="heroLiveCountTag">Trạng thái <span data-cms="courtCount">@initialCourtCount</span> sân trực tiếp</span>
-                    <span class="text-xs" style="color:#CBD5E1;">Mở cửa: <strong class="text-mono" id="heroOpenHours" data-cms="openHours" style="color:#FFF;">06:00 – 22:00</strong></span>
+                    <span class="text-xs" style="color:#CBD5E1;">Mở cửa: <strong class="text-mono" id="heroOpenHours" data-cms="openHours" style="color:#FFF;">@ssrSettings.OpenTime – @ssrSettings.CloseTime</strong></span>
                 </div>
                 <div class="hero-mini-courts" id="heroMiniCourts"></div>
             </div>
@@ -145,8 +158,8 @@
 
         <div class="pricing-grid">
             <div class="pricing-card">
-                <span class="pricing-tag" id="pricingStdTag">Khung Giờ Tiêu Chuẩn (06:00 – 17:00)</span>
-                <div class="pricing-price" id="priceStandardCard">120.000 đ <span>/ giờ</span></div>
+                <span class="pricing-tag" id="pricingStdTag">Khung Giờ Tiêu Chuẩn (@ssrSettings.OpenTime – @ssrSettings.PeakStart)</span>
+                <div class="pricing-price" id="priceStandardCard">@ssrStdPriceNum đ <span>/ giờ</span></div>
                 <p class="text-sm text-muted">Phù hợp cho tập luyện buổi sáng, giao lưu nhẹ nhàng và huấn luyện kỹ thuật.</p>
                 <ul class="pricing-features">
                     <li><iconify-icon icon="lucide:check" style="color:var(--color-success)"></iconify-icon> Miễn phí trà đá &amp; wifi tốc độ cao</li>
@@ -157,8 +170,8 @@
             </div>
 
             <div class="pricing-card featured">
-                <span class="pricing-tag" id="pricingPeakTag">Khung Giờ Vàng (17:00 – 22:00)</span>
-                <div class="pricing-price" id="pricePeakCard">150.000 đ <span>/ giờ</span></div>
+                <span class="pricing-tag" id="pricingPeakTag">Khung Giờ Vàng (@ssrSettings.PeakStart – @ssrSettings.CloseTime)</span>
+                <div class="pricing-price" id="pricePeakCard">@ssrPeakTotalNum đ <span>/ giờ</span></div>
                 <p class="text-sm" style="color:#CBD5E1;">Trải nghiệm thi đấu sôi động dưới hệ thống đèn LED Stadium chống lóa 1000 Lux.</p>
                 <ul class="pricing-features">
                     <li><iconify-icon icon="lucide:check" style="color:var(--color-volt)"></iconify-icon> Bật 100% hệ thống đèn LED thi đấu</li>
@@ -169,9 +182,9 @@
             </div>
 
             <div class="pricing-card">
-                <span class="pricing-tag" id="promoTitleText">Đặc Quyền Hội Viên CLB</span>
+                <span class="pricing-tag" id="promoTitleText">@ssrClubTitle</span>
                 <div class="pricing-price" id="promoTierPrice">Đến -15% <span>/ hạng thẻ VIP</span></div>
-                <p class="text-sm text-muted" id="promoDescText">Đăng ký tài khoản hội viên chính thức để tích lũy chi tiêu thực thu và tự động nâng hạng thẻ Bạc (-5%), Vàng (-10%), VIP Kim Cương (-15%).</p>
+                <p class="text-sm text-muted" id="promoDescText">@ssrClubDesc</p>
                 <ul class="pricing-features">
                     <li><iconify-icon icon="lucide:check" style="color:var(--color-success)"></iconify-icon> Chiết khấu tự động theo hạng thẻ (5% – 15%)</li>
                     <li><iconify-icon icon="lucide:check" style="color:var(--color-success)"></iconify-icon> Quản lý lịch sử vé QR &amp; hóa đơn cá nhân</li>

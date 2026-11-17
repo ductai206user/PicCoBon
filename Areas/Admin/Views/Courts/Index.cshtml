@@ -30,7 +30,7 @@
                     <a asp-action="Create" class="btn btn-primary btn-sm">+ Thêm sân thi đấu mới</a>
                 </div>
                 <div class="card-body table-responsive p-0">
-                    <table class="table table-hover text-nowrap">
+                    <table class="table table-hover">
                         <thead>
                             <tr>
                                 <th>Mã sân</th>
@@ -51,8 +51,8 @@
                                     <td class="font-weight-bold">@item.CourtName</td>
                                     <td>@(item.TypeLabel ?? item.CourtType)</td>
                                     <td>@item.Surface</td>
-                                    <td class="text-success font-weight-bold text-mono">@string.Format("{0:N0} đ", item.BasePrice)</td>
-                                    <td class="text-mono">@string.Format("{0:N0} đ", item.Surcharge)</td>
+                                    <td class="text-success font-weight-bold text-mono text-nowrap">@string.Format("{0:N0} đ", item.BasePrice)</td>
+                                    <td class="text-mono text-nowrap">@string.Format("{0:N0} đ", item.Surcharge)</td>
                                     <td>
                                         @if (item.IsActive)
                                         {

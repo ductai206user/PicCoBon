@@ -16,7 +16,8 @@
                 </div>
                 <div class="col-sm-6 text-sm-right mt-2 mt-sm-0">
                     <a asp-action="Create" class="btn btn-primary" data-testid="admin-btn-create-product">
-                        <i class="fas fa-plus mr-1"></i> Thêm sản phẩm mới
+                        <iconify-icon icon="lucide:plus" width="16"></iconify-icon>
+                        <span>Thêm sản phẩm mới</span>
                     </a>
                 </div>
             </div>
@@ -28,10 +29,10 @@
             @if (TempData["SuccessMessage"] is string successMsg && !string.IsNullOrWhiteSpace(successMsg))
             {
                 <div class="alert alert-success alert-dismissible fade show" role="alert" data-testid="admin-product-alert-success">
-                    <i class="fas fa-check-circle mr-1"></i> @successMsg
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Đóng">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <span class="d-flex align-items-center" style="gap:6px;">
+                        <iconify-icon icon="lucide:check-circle-2" width="16"></iconify-icon>
+                        <span>@successMsg</span>
+                    </span>
                 </div>
             }
 
@@ -65,7 +66,7 @@
                                     <td class="align-middle text-muted font-weight-bold">#@(i++)</td>
                                     <td class="align-middle">
                                         <div class="d-flex align-items-center">
-                                            <div style="width:56px;height:56px;border-radius:10px;background:#F8FAFC;border:1px solid #E2E8F0;padding:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+                                            <div style="width:56px;height:56px;border-radius:10px;background:#FFFFFF;border:1px solid var(--border-color);padding:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
                                                 <img src="@resolvedImg"
                                                      alt="@item.Title"
                                                      width="48"
@@ -96,8 +97,8 @@
                                         </div>
                                     </td>
                                     <td class="align-middle">@(item.CategoryProduct?.Title ?? "Chưa phân loại")</td>
-                                    <td class="align-middle text-danger font-weight-bold">@string.Format("{0:N0} đ", item.Price ?? 0)</td>
-                                    <td class="align-middle">
+                                    <td class="align-middle text-danger font-weight-bold text-mono text-nowrap">@string.Format("{0:N0} đ", item.Price ?? 0)</td>
+                                    <td class="align-middle text-nowrap">
                                         @if (stock <= 0)
                                         {
                                             <span class="badge badge-danger">Hết hàng (0)</span>
@@ -122,12 +123,16 @@
                                         }
                                     </td>
                                     <td class="align-middle">
-                                        <a asp-action="Edit" asp-route-id="@item.ProductId" class="btn btn-sm btn-info mr-1" data-testid="admin-edit-product-@item.ProductId">
-                                            <i class="fas fa-edit"></i> Sửa
-                                        </a>
-                                        <a asp-action="Delete" asp-route-id="@item.ProductId" class="btn btn-sm btn-outline-danger" data-testid="admin-delete-product-@item.ProductId">
-                                            <i class="fas fa-trash"></i> Xoá
-                                        </a>
+                                        <div class="d-flex align-items-center" style="gap:6px;">
+                                            <a asp-action="Edit" asp-route-id="@item.ProductId" class="btn btn-sm btn-info" data-testid="admin-edit-product-@item.ProductId">
+                                                <iconify-icon icon="lucide:pencil" width="14"></iconify-icon>
+                                                <span>Sửa</span>
+                                            </a>
+                                            <a asp-action="Delete" asp-route-id="@item.ProductId" class="btn btn-sm btn-danger-outline" data-testid="admin-delete-product-@item.ProductId">
+                                                <iconify-icon icon="lucide:trash-2" width="14"></iconify-icon>
+                                                <span>Xoá</span>
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                             }

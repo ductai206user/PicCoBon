@@ -29,11 +29,7 @@ async function renderReports() {
   const fromEl = document.getElementById('reportFrom');
   const toEl = document.getElementById('reportTo');
   if (fromEl && !fromEl.value) {
-    const now = new Date();
-    const first = new Date(now.getFullYear(), now.getMonth(), 1);
-    const y = first.getFullYear();
-    const m = String(first.getMonth() + 1).padStart(2, '0');
-    fromEl.value = `${y}-${m}-01`;
+    fromEl.value = `${getTodayISO().slice(0, 7)}-01`;
   }
   if (toEl && !toEl.value) {
     toEl.value = getTodayISO();
@@ -51,6 +47,16 @@ async function renderReports() {
 
   const filterBtn = document.getElementById('btnFilterReport');
   if (filterBtn) filterBtn.disabled = true;
+
+  const timeoutId = setTimeout(() => {
+    try {
+      const timeoutErr = new Error('Timeout fetching ledger summary');
+      timeoutErr.name = 'TimeoutError';
+      controller.abort(timeoutErr);
+    } catch (_) {
+      controller.abort();
+    }
+  }, 15000);
 
   if (!_lastReportData) {
     setReportBanner(renderUiStateBanner('loading', {
@@ -117,15 +123,18 @@ async function renderReports() {
 
     return { ok: true, status: 200, data };
   } catch (err) {
-    if (err && err.name === 'AbortError') {
+    const isTimeout = Boolean((err && err.name === 'TimeoutError') || (controller.signal && controller.signal.reason && controller.signal.reason.name === 'TimeoutError'));
+    if (err && err.name === 'AbortError' && !isTimeout) {
       return { ok: false, aborted: true };
     }
     const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    const errMsg = isOffline
-      ? 'Thiết bị đang mất kết nối mạng. Không thể tải dữ liệu báo cáo doanh thu.'
-      : 'Không thể kết nối tới máy chủ để tải dữ liệu báo cáo doanh thu.';
+    const errMsg = isTimeout
+      ? 'Máy chủ phản hồi quá lâu (quá 15 giây) khi tổng hợp báo cáo sổ cái.'
+      : (isOffline
+        ? 'Thiết bị đang mất kết nối mạng. Không thể tải dữ liệu báo cáo doanh thu.'
+        : 'Không thể kết nối tới máy chủ để tải dữ liệu báo cáo doanh thu.');
 
-    showToast('Lỗi kết nối', errMsg, 'error');
+    showToast(isTimeout ? 'Quá thời gian tải báo cáo' : 'Lỗi kết nối', errMsg, 'error');
 
     if (_lastReportData) {
       const lastTimeStr = formatSyncTimeHHMMSS(_lastReportSyncTime) || 'trước đó';
@@ -140,7 +149,7 @@ async function renderReports() {
       }));
     } else {
       setReportBanner(renderUiStateBanner(isOffline ? 'offline' : 'error', {
-        title: 'Mất kết nối khi tải báo cáo sổ cái',
+        title: isTimeout ? 'Quá thời gian chờ tải báo cáo sổ cái' : 'Mất kết nối khi tải báo cáo sổ cái',
         message: errMsg,
         actionHtml: `<button type="button" class="btn btn-primary btn-sm" onclick="filterReport()">
                        <iconify-icon icon="lucide:refresh-cw" width="15"></iconify-icon>
@@ -151,6 +160,7 @@ async function renderReports() {
 
     return { ok: false, status: 0, error: errMsg, isStale: Boolean(_lastReportData) };
   } finally {
+    clearTimeout(timeoutId);
     if (filterBtn && reqId === _reportReqCounter) {
       filterBtn.disabled = false;
     }
@@ -212,20 +222,21 @@ function renderReportCourts(courts) {
     return;
   }
 
-  const maxVal = Math.max(...courts.map(c => Math.max(Number(c.collectedRevenue) || 0, Number(c.unpaidReceivable) || 0)), 100000);
+  const maxVal = Math.max(...courts.map(c => Math.max(Math.abs(Number(c.collectedRevenue) || 0), Math.max(0, Number(c.unpaidReceivable) || 0))), 100000);
   chartEl.innerHTML = courts.map(c => {
-    const collected = Math.max(0, Number(c.collectedRevenue) || 0);
+    const rawCollected = Number(c.collectedRevenue) || 0;
     const unpaid = Math.max(0, Number(c.unpaidReceivable) || 0);
-    const isZero = collected <= 0;
-    const pct = isZero ? 0 : Math.max(6, Math.min(100, Math.round((collected / maxVal) * 100)));
-    const barLabel = isZero ? '0 đ' : formatMoney(collected);
-    const ariaSummary = `${c.courtName}: Thực thu ${formatMoney(collected)}, Công nợ ${formatMoney(unpaid)}, ${Number(c.sessionsCount) || 0} ca (${Number(c.hoursBooked) || 0} giờ)`;
+    const isNegative = rawCollected < 0;
+    const isZero = rawCollected === 0;
+    const pct = rawCollected <= 0 ? 0 : Math.max(6, Math.min(100, Math.round((rawCollected / maxVal) * 100)));
+    const barLabel = isZero ? '0 đ' : formatMoney(rawCollected);
+    const ariaSummary = `${c.courtName}: Thực thu ${formatMoney(rawCollected)}${isNegative ? ' (Âm do hoàn tiền vượt thu trong kỳ)' : ''}, Công nợ ${formatMoney(unpaid)}, ${Number(c.sessionsCount) || 0} ca (${Number(c.hoursBooked) || 0} giờ)`;
 
     return `
       <div class="chart-col" role="img" aria-label="${escapeAttr(ariaSummary)}">
         <div class="chart-bar-track">
-          <div class="chart-bar ${isZero ? 'is-zero' : ''}" data-value="${collected}" style="height:${pct}%;min-height:0;max-width:64px;" title="${escapeAttr(ariaSummary)}">
-            <span class="chart-bar-value text-mono">${escapeHtml(barLabel)}</span>
+          <div class="chart-bar ${rawCollected <= 0 ? 'is-zero' : ''} ${isNegative ? 'is-negative' : ''}" data-value="${rawCollected}" style="height:${pct}%;min-height:0;max-width:64px;" title="${escapeAttr(ariaSummary)}">
+            <span class="chart-bar-value text-mono" ${isNegative ? 'style="color:var(--color-danger);font-weight:700;"' : ''}>${escapeHtml(barLabel)}</span>
           </div>
         </div>
         <span class="chart-label">${escapeHtml(c.courtName)}</span>

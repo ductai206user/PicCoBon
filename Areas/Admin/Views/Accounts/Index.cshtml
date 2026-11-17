@@ -32,13 +32,13 @@
     <div class="container-fluid">
         @if (TempData["AdminAccountSuccess"] != null)
         {
-            <div style="background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;padding:0.95rem 1.2rem;border-radius:12px;margin-bottom:1.25rem;font-weight:600;font-size:0.88rem;word-break:break-word;">
+            <div class="sh-alert-success">
                 ✓ @TempData["AdminAccountSuccess"]
             </div>
         }
         @if (TempData["AdminAccountMsg"] != null)
         {
-            <div style="background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:0.9rem 1.2rem;border-radius:12px;margin-bottom:1.25rem;font-weight:600;font-size:0.88rem;">
+            <div class="sh-alert-danger">
                 ⚠ @TempData["AdminAccountMsg"]
             </div>
         }

@@ -168,7 +168,7 @@ function renderLookupTable(list, titleText) {
 
     return `
       <tr>
-        <td><span class="text-mono font-bold" style="color:var(--color-indigo)">${escapeHtml(b.id)}</span></td>
+        <td><span class="text-mono font-bold" style="color:var(--color-indigo);white-space:nowrap;">${escapeHtml(b.id)}</span></td>
         <td>
           <div class="font-bold">${escapeHtml(b.name)}</div>
           <div class="text-xs text-muted text-mono">${escapeHtml(b.phone)}</div>

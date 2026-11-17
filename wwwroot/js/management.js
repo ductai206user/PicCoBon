@@ -3,29 +3,85 @@
    Separates Session Finish vs Payment/Refund Ledger + Standalone Shop Orders
    ========================================================================== */
 
-let lockSelectedCourt = 1;
+let lockSelectedCourt = null;
 let mgmtFilter = 'active';
 let posBooking = null;
 let posCart = [];
 let posCourtDuration = 60;
 let activeLedgerContext = null; // { kind: 'booking' | 'order', code: string }
+let ADMIN_SHOP_ORDERS = null;
+let ADMIN_ORDERS_LOADED = false;
+let shopOrderPageSize = 25;
+const _fulfillingOrderCodes = new Set();
+let _approvingBatch = false;
+let _ledgerPaySubmitting = false;
+
+function getEffectiveAdminShopOrders() {
+  if (ADMIN_ORDERS_LOADED && Array.isArray(ADMIN_SHOP_ORDERS)) {
+    return ADMIN_SHOP_ORDERS;
+  }
+  return Array.isArray(STANDALONE_ORDERS) ? STANDALONE_ORDERS : [];
+}
+
+async function loadAdminShopOrders() {
+  try {
+    const res = await fetch('/api/admin/orders?standaloneOnly=false', {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      cache: 'no-store'
+    });
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok && Array.isArray(data.orders)) {
+      ADMIN_SHOP_ORDERS = data.orders;
+      ADMIN_ORDERS_LOADED = true;
+      renderStandaloneOrdersSection();
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
 
 function initManagement() {
   if (!requireRole('admin')) return;
 
   const lockDateEl = document.getElementById('lockDate');
-  if (lockDateEl && !lockDateEl.value) lockDateEl.value = getTodayStr();
+  if (lockDateEl) {
+    const todayIso = getTodayStr();
+    lockDateEl.min = todayIso;
+    if (!lockDateEl.value || lockDateEl.value < todayIso) lockDateEl.value = todayIso;
+  }
 
   populateLockStartOptions();
   renderManagement();
+  loadAdminShopOrders();
+}
+
+function getClubOperatingWindowMinutes() {
+  const openStr = CMS_CONFIG.openTime || '06:00';
+  const closeStr = CMS_CONFIG.closeTime || '22:00';
+  const openMins = timeToMinutes(openStr) || 360;
+  const closeMins = timeToMinutes(closeStr) || 1320;
+  return {
+    openStr,
+    closeStr,
+    openMins,
+    closeMins: Math.max(openMins + 60, closeMins)
+  };
 }
 
 function populateLockStartOptions() {
   const lockSel = document.getElementById('lockStart');
+  const { openStr, closeStr, openMins, closeMins } = getClubOperatingWindowMinutes();
+  const fullDayOpt = document.getElementById('lockDurationFullDayOption');
+  if (fullDayOpt) {
+    const fullMins = closeMins - openMins;
+    const fullHrs = Number((fullMins / 60).toFixed(1));
+    fullDayOpt.textContent = `Cả ngày (${openStr} → ${closeStr} · ${fullHrs}h)`;
+  }
+
   if (!lockSel) return;
-  const openMins = timeToMinutes(CMS_CONFIG.openTime || '06:00') || 360;
-  const closeMins = timeToMinutes(CMS_CONFIG.closeTime || '22:00') || 1320;
-  const curVal = lockSel.value || '12:00';
+  const curVal = lockSel.value || (openMins <= 720 && closeMins > 720 ? '12:00' : openStr);
   let html = '';
   for (let m = openMins; m <= closeMins - 30; m += 30) {
     const t = minutesToTime(m);
@@ -34,6 +90,34 @@ function populateLockStartOptions() {
   lockSel.innerHTML = html;
   if ([...lockSel.options].some(o => o.value === curVal)) {
     lockSel.value = curVal;
+  }
+  onLockWindowChange();
+}
+
+function onLockDurationChange() {
+  const durVal = document.getElementById('lockDuration')?.value || '60';
+  const lockSel = document.getElementById('lockStart');
+  const { openStr } = getClubOperatingWindowMinutes();
+  if (durVal === 'full_day' && lockSel) {
+    lockSel.value = openStr;
+  }
+  onLockWindowChange();
+}
+
+function onLockWindowChange() {
+  const preview = document.getElementById('lockWindowPreview');
+  const { openMins, closeMins, closeStr } = getClubOperatingWindowMinutes();
+  const startStr = document.getElementById('lockStart')?.value || minutesToTime(openMins);
+  const durRaw = document.getElementById('lockDuration')?.value || '60';
+  const durMins = durRaw === 'full_day' ? (closeMins - openMins) : (Number(durRaw) || 60);
+  const startMins = timeToMinutes(startStr);
+  const endMins = startMins + durMins;
+
+  if (preview) {
+    const exceedsClose = endMins > closeMins || endMins > 24 * 60;
+    preview.innerHTML = exceedsClose
+      ? `<span style="color:var(--color-danger);font-weight:600;">Khung khóa (${startStr} → ${minutesToTime(Math.min(endMins, 24 * 60))}${endMins > 24 * 60 ? '+' : ''}) vượt quá giờ đóng cửa (${closeStr}).</span>`
+      : `Khung giờ áp dụng: <strong class="text-mono">${escapeHtml(startStr)} → ${escapeHtml(minutesToTime(endMins))}</strong> (${durMins} phút)`;
   }
 }
 
@@ -219,14 +303,29 @@ function renderManagement() {
   // 3. Render Standalone Pro Shop Orders (P1-15)
   renderStandaloneOrdersSection();
 
-  // 4. Render Court Lock Buttons & Active Locks List
+  // 4. Render Court Lock Buttons & Active Locks List (FIX-02: never assume COURT id=1 if COURTS empty)
+  if (HAS_SERVER_STATE) {
+    if (COURTS.length > 0 && !getCourtById(lockSelectedCourt)) {
+      lockSelectedCourt = Number(COURTS[0].id);
+    } else if (COURTS.length === 0) {
+      lockSelectedCourt = null;
+    }
+  }
   const lockBtnsEl = document.getElementById('lockCourtBtns');
+  const lockSubmitBtn = document.getElementById('btnCreateCourtLock');
   if (lockBtnsEl) {
-    lockBtnsEl.innerHTML = COURTS.map(c => `
-      <button type="button" class="btn ${Number(c.id) === Number(lockSelectedCourt) ? 'btn-danger' : 'btn-outline'} btn-sm" onclick="selectLockCourt(${Number(c.id)})">
-        ${escapeHtml(c.name)}
-      </button>
-    `).join('');
+    if (COURTS.length === 0) {
+      lockBtnsEl.innerHTML = `<div class="text-xs text-muted" style="grid-column:1/-1;">Chưa có sân đang hoạt động để khóa.</div>`;
+    } else {
+      lockBtnsEl.innerHTML = COURTS.map(c => `
+        <button type="button" class="btn ${Number(c.id) === Number(lockSelectedCourt) ? 'btn-danger' : 'btn-outline'} btn-sm" onclick="selectLockCourt(${Number(c.id)})">
+          ${escapeHtml(c.name)}
+        </button>
+      `).join('');
+    }
+  }
+  if (lockSubmitBtn) {
+    lockSubmitBtn.disabled = !HAS_SERVER_STATE || COURTS.length === 0 || !getCourtById(lockSelectedCourt);
   }
 
   const locksCountEl = document.getElementById('activeLocksCount');
@@ -253,52 +352,170 @@ function renderManagement() {
   }
 }
 
+function handleShopOrderFilterChange() {
+  shopOrderPageSize = 25;
+  renderStandaloneOrdersSection();
+}
+
+function loadMoreShopOrders() {
+  shopOrderPageSize += 25;
+  renderStandaloneOrdersSection();
+}
+
 function renderStandaloneOrdersSection() {
   const countEl = document.getElementById('standaloneOrdersCount');
   const listEl = document.getElementById('standaloneOrdersList');
+  const pageEl = document.getElementById('shopOrdersPagination');
   if (!listEl) return;
 
-  const orders = Array.isArray(STANDALONE_ORDERS) ? STANDALONE_ORDERS : [];
-  if (countEl) countEl.textContent = orders.length;
+  const allOrders = getEffectiveAdminShopOrders();
+  if (countEl) countEl.textContent = allOrders.length;
 
-  if (orders.length === 0) {
+  if (allOrders.length === 0) {
+    if (pageEl) pageEl.style.display = 'none';
     listEl.innerHTML = `
       <div class="empty-state" style="padding:1.5rem 1rem">
-        <div class="text-xs text-muted">Chưa có đơn hàng mua lẻ Pro Shop nào.</div>
+        <div class="text-xs text-muted">Chưa có đơn hàng Pro Shop nào.</div>
       </div>`;
     return;
   }
 
-  listEl.innerHTML = orders.slice(0, 25).map(o => {
+  const q = (document.getElementById('shopOrderSearch')?.value || '').trim().toLowerCase();
+  const mode = document.getElementById('shopOrderFilter')?.value || 'all';
+
+  const filtered = allOrders.filter(o => {
+    const isCancelled = o.status === 'cancelled';
+    const fulfill = String(o.fulfillmentStatus || 'pending').toLowerCase();
+    const total = Number(o.totalAmount) || 0;
+    const paid = Number(o.paidAmount) || 0;
+
+    if (mode === 'pending_fulfill' && (isCancelled || fulfill === 'delivered')) return false;
+    if (mode === 'delivered' && (isCancelled || fulfill !== 'delivered')) return false;
+    if (mode === 'unpaid' && (isCancelled || Boolean(o.bookingCode) || paid >= total)) return false;
+    if (mode === 'cancelled' && !isCancelled) return false;
+
+    if (q) {
+      const hay = `${o.code || ''} ${o.customerName || ''} ${o.phone || ''} ${o.address || ''} ${o.bookingCode || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    if (pageEl) pageEl.style.display = 'none';
+    listEl.innerHTML = `
+      <div class="empty-state" style="padding:1.5rem 1rem">
+        <div class="text-xs text-muted">Không có đơn hàng nào khớp bộ lọc hiện tại (${allOrders.length} đơn đang quản lý).</div>
+      </div>`;
+    return;
+  }
+
+  const visible = filtered.slice(0, shopOrderPageSize);
+
+  listEl.innerHTML = visible.map(o => {
     const total = Number(o.totalAmount) || 0;
     const paid = Number(o.paidAmount) || 0;
     const rem = Math.max(0, total - paid);
     const isCancelled = o.status === 'cancelled';
+    const fulfillStatus = String(o.fulfillmentStatus || 'pending').toLowerCase();
+    const isDelivered = fulfillStatus === 'delivered';
+    const isLinked = Boolean(o.bookingCode);
+    const isBusyFulfill = _fulfillingOrderCodes.has(o.code);
+
+    const fulfillBadgeHtml = isCancelled
+      ? '<span class="badge badge-danger">Đã hủy · Đã hoàn kho</span>'
+      : (isDelivered
+        ? '<span class="badge badge-success">Đã giao đồ</span>'
+        : '<span class="badge badge-warning">Chờ giao đồ</span>');
+
+    const channelBadgeHtml = isLinked
+      ? `<span class="badge badge-primary">Gộp sân ${escapeHtml(o.bookingCode)}</span>`
+      : '<span class="badge badge-neutral">Đơn lẻ quầy</span>';
+
+    const paymentSummaryHtml = isCancelled
+      ? ''
+      : (isLinked
+        ? `Thanh toán theo hóa đơn sân <strong>${escapeHtml(o.bookingCode)}</strong> · Giá trị: <strong class="text-mono">${formatMoney(total)}</strong>`
+        : `Phải thu: <strong class="text-mono">${formatMoney(total)}</strong> · Đã thu: <strong class="text-mono" style="color:var(--color-success)">${formatMoney(paid)}</strong>`);
 
     return `
-      <div class="item-row" ${isCancelled ? 'style="opacity:0.65"' : ''}>
+      <div class="item-row" data-order-code="${escapeAttr(o.code)}" ${isCancelled ? 'style="opacity:0.65"' : ''}>
         <div class="item-avatar" style="background:var(--color-indigo-50);color:var(--color-indigo);">PS</div>
         <div class="item-info">
           <div class="item-name" style="flex-wrap:wrap;gap:0.35rem;">
             <span class="text-mono font-bold" style="color:var(--color-indigo)">${escapeHtml(o.code)}</span>
             <span>${escapeHtml(o.customerName)}</span>
-            ${isCancelled ? '<span class="badge badge-danger">Đã hủy · Đã hoàn kho</span>' : paymentBadgeHtml(paid, total, o.paymentStatus)}
+            ${channelBadgeHtml}
+            ${fulfillBadgeHtml}
+            ${(!isCancelled && !isLinked) ? paymentBadgeHtml(paid, total, o.paymentStatus) : ''}
           </div>
           <div class="item-detail">
-            SĐT: <span class="text-mono">${escapeHtml(o.phone)}</span> · ${escapeHtml(o.address || 'Nhận tại quầy')} · Phải thu: <strong class="text-mono">${formatMoney(total)}</strong> · Đã thu: <strong class="text-mono" style="color:var(--color-success)">${formatMoney(paid)}</strong>
+            SĐT: <span class="text-mono">${escapeHtml(o.phone)}</span> · ${escapeHtml(o.address || 'Nhận tại quầy')} · ${paymentSummaryHtml}
           </div>
         </div>
         <div class="item-actions" style="flex-wrap:wrap;">
           ${!isCancelled ? `
-            <button class="btn ${rem > 0 ? 'btn-primary' : 'btn-outline'} btn-sm" onclick="openLedgerModal('order', '${escapeAttr(o.code)}')">
-              <iconify-icon icon="lucide:wallet" width="14"></iconify-icon> ${rem > 0 ? 'Thu tiền' : 'Sổ cái / Hoàn'}
-            </button>
-            ${paid === 0 ? `<button class="btn btn-danger-outline btn-sm" onclick="cancelStandaloneOrder('${escapeAttr(o.code)}')">Hủy &amp; Hoàn kho</button>` : ''}
+            ${!isDelivered ? `
+              <button type="button" class="btn btn-success btn-sm" data-fulfill-code="${escapeAttr(o.code)}" ${isBusyFulfill ? 'disabled' : ''} onclick="fulfillAdminOrder('${escapeAttr(o.code)}')">
+                <iconify-icon icon="lucide:package-check" width="14"></iconify-icon> ${isBusyFulfill ? 'Đang xử lý...' : 'Đã giao đồ'}
+              </button>
+            ` : ''}
+            ${isLinked ? `
+              <button type="button" class="btn btn-outline btn-sm" onclick="openLedgerModal('booking', '${escapeAttr(o.bookingCode)}')">
+                <iconify-icon icon="lucide:wallet" width="14"></iconify-icon> Sổ cái sân
+              </button>
+            ` : `
+              <button type="button" class="btn ${rem > 0 ? 'btn-primary' : 'btn-outline'} btn-sm" onclick="openLedgerModal('order', '${escapeAttr(o.code)}')">
+                <iconify-icon icon="lucide:wallet" width="14"></iconify-icon> ${rem > 0 ? 'Thu tiền' : 'Sổ cái / Hoàn'}
+              </button>
+              ${paid === 0 ? `<button type="button" class="btn btn-danger-outline btn-sm" onclick="cancelStandaloneOrder('${escapeAttr(o.code)}')">Hủy &amp; Hoàn kho</button>` : ''}
+            `}
           ` : ''}
         </div>
       </div>
     `;
   }).join('');
+
+  if (pageEl) {
+    pageEl.style.display = 'flex';
+    pageEl.style.alignItems = 'center';
+    pageEl.style.justifyContent = 'space-between';
+    pageEl.style.gap = '0.5rem';
+    pageEl.style.flexWrap = 'wrap';
+    const remaining = filtered.length - visible.length;
+    pageEl.innerHTML = `
+      <span class="text-xs text-muted">Đang hiển thị <strong>${visible.length}</strong> / <strong>${filtered.length}</strong> đơn hàng${filtered.length !== allOrders.length ? ` (lọc từ ${allOrders.length} đơn)` : ''}.</span>
+      ${remaining > 0 ? `<button type="button" class="btn btn-outline btn-sm" id="btnLoadMoreShopOrders" onclick="loadMoreShopOrders()">Xem thêm (+${Math.min(25, remaining)} đơn)</button>` : ''}
+    `;
+  }
+}
+
+async function fulfillAdminOrder(orderCode) {
+  if (!orderCode || _fulfillingOrderCodes.has(orderCode)) return;
+  _fulfillingOrderCodes.add(orderCode);
+  renderStandaloneOrdersSection();
+
+  try {
+    const res = await apiFetch(`/api/admin/orders/${encodeURIComponent(orderCode)}/fulfill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      showToast('Không thể cập nhật giao hàng', data.error || 'Đơn hàng đã bị hủy hoặc không hợp lệ.', 'error');
+      await Promise.all([syncDatabaseFromServer(true), loadAdminShopOrders()]);
+      return;
+    }
+
+    await Promise.all([syncDatabaseFromServer(true), loadAdminShopOrders()]);
+    renderManagement();
+    showToast('Đã giao hàng Pro Shop!', `Đơn ${orderCode} đã được xác nhận Hoàn tất / Đã giao đồ.`, 'success');
+  } catch (_) {
+    showToast('Lỗi kết nối', 'Không thể cập nhật trạng thái giao hàng lúc này.', 'error');
+  } finally {
+    _fulfillingOrderCodes.delete(orderCode);
+    renderStandaloneOrdersSection();
+  }
 }
 
 async function approveBooking(id) {
@@ -335,15 +552,55 @@ async function approveBooking(id) {
 }
 
 async function approveAllPending() {
-  const pendings = BOOKINGS.filter(b => b.status === 'pending');
-  let successCount = 0;
-  for (const b of pendings) {
-    const res = await apiFetch(`/api/admin/bookings/${encodeURIComponent(b.id)}/approve`, { method: 'POST' });
-    if (res.ok) successCount++;
+  if (_approvingBatch) return;
+  const pendings = BOOKINGS.filter(b => b.status === 'pending' && isPendingBookingHoldActive(b));
+  if (pendings.length === 0) {
+    await syncDatabaseFromServer(true);
+    renderManagement();
+    showToast('Không có đơn hợp lệ', 'Không còn đơn chờ duyệt nào đang trong thời hạn giữ chỗ.', 'info');
+    return;
   }
-  await syncDatabaseFromServer(true);
-  showToast('Đã duyệt hàng loạt', `Đã duyệt thành công ${successCount}/${pendings.length} yêu cầu đặt sân.`, 'success');
-  renderManagement();
+
+  if (!confirm(`Xác nhận duyệt hàng loạt ${pendings.length} yêu cầu đặt sân đang giữ chỗ hợp lệ?`)) {
+    return;
+  }
+
+  const btn = document.getElementById('approveAllBtn');
+  _approvingBatch = true;
+  if (btn) btn.disabled = true;
+
+  let successCount = 0;
+  let conflictOrExpiredCount = 0;
+  let failedCount = 0;
+
+  try {
+    for (const b of pendings) {
+      try {
+        const res = await apiFetch(`/api/admin/bookings/${encodeURIComponent(b.id)}/approve`, { method: 'POST' });
+        if (res.ok) {
+          successCount++;
+        } else if (res.status === 409) {
+          conflictOrExpiredCount++;
+        } else {
+          failedCount++;
+        }
+      } catch (_) {
+        failedCount++;
+      }
+    }
+
+    await syncDatabaseFromServer(true);
+    renderManagement();
+
+    const parts = [`Đã duyệt thành công ${successCount}/${pendings.length} đơn`];
+    if (conflictOrExpiredCount > 0) parts.push(`${conflictOrExpiredCount} đơn trùng lịch hoặc hết giữ chỗ`);
+    if (failedCount > 0) parts.push(`${failedCount} đơn gặp lỗi máy chủ`);
+    const level = (failedCount > 0 || conflictOrExpiredCount > 0) ? (successCount > 0 ? 'warning' : 'error') : 'success';
+    showToast(successCount > 0 ? 'Kết quả duyệt hàng loạt' : 'Chưa duyệt được đơn nào', `${parts.join(' · ')}.`, level);
+  } finally {
+    _approvingBatch = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function rejectBooking(id) {
@@ -428,10 +685,7 @@ function toggleTransferRefRequirement() {
   }
 }
 
-async function openLedgerModal(kind, code) {
-  activeLedgerContext = { kind, code };
-  toggleTransferRefRequirement();
-
+function refreshLedgerModalFields(kind, code) {
   let title = '';
   let subtitle = '';
   let due = 0;
@@ -441,7 +695,7 @@ async function openLedgerModal(kind, code) {
 
   if (kind === 'booking') {
     const b = BOOKINGS.find(x => x.id === code);
-    if (!b) return;
+    if (!b) return false;
     isPlayingBooking = b.status === 'playing';
     const courtName = getCourtDisplayName(b.courtId, b.courtName);
     const posExtra = Number(b.posTotal) || (b.posItems || []).reduce((s, i) => s + Number(i.price || 0) * Number(i.qty || 0), 0);
@@ -461,8 +715,9 @@ async function openLedgerModal(kind, code) {
       <div class="payment-line total"><span>Còn phải thu</span><span class="text-mono" style="color:${due - paid > 0 ? 'var(--color-primary)' : 'var(--color-success)'}">${formatMoney(Math.max(0, due - paid))}</span></div>
     `;
   } else {
-    const o = STANDALONE_ORDERS.find(x => x.code === code);
-    if (!o) return;
+    const orders = getEffectiveAdminShopOrders();
+    const o = orders.find(x => x.code === code) || STANDALONE_ORDERS.find(x => x.code === code);
+    if (!o) return false;
     due = Number(o.totalAmount) || 0;
     paid = Number(o.paidAmount) || 0;
     title = `Sổ Cái Đơn Lẻ Pro Shop — ${o.code}`;
@@ -484,8 +739,6 @@ async function openLedgerModal(kind, code) {
 
   const amtIn = document.getElementById('ledgerPayAmount');
   if (amtIn) amtIn.value = rem > 0 ? rem : '';
-  document.getElementById('ledgerPayRef').value = '';
-  document.getElementById('ledgerPayNote').value = '';
 
   const finishWrap = document.getElementById('ledgerAlsoFinishWrap');
   const finishChk = document.getElementById('ledgerAlsoFinishSession');
@@ -497,9 +750,28 @@ async function openLedgerModal(kind, code) {
   const refundDetails = document.getElementById('ledgerRefundDetails');
   if (refundDetails) {
     refundDetails.style.display = paid > 0 ? 'block' : 'none';
-    refundDetails.open = false;
     const refAmt = document.getElementById('ledgerRefundAmount');
     if (refAmt) refAmt.value = paid;
+  }
+  return true;
+}
+
+async function openLedgerModal(kind, code) {
+  activeLedgerContext = { kind, code };
+  toggleTransferRefRequirement();
+
+  const partialBanner = document.getElementById('ledgerPartialFailureBanner');
+  if (partialBanner) partialBanner.style.display = 'none';
+  const payBtn = document.getElementById('btnSubmitLedgerPay');
+  if (payBtn) payBtn.disabled = false;
+
+  if (!refreshLedgerModalFields(kind, code)) return;
+
+  document.getElementById('ledgerPayRef').value = '';
+  document.getElementById('ledgerPayNote').value = '';
+  const refundDetails = document.getElementById('ledgerRefundDetails');
+  if (refundDetails) {
+    refundDetails.open = false;
     document.getElementById('ledgerRefundRef').value = '';
     document.getElementById('ledgerRefundReason').value = '';
   }
@@ -536,7 +808,7 @@ async function loadLedgerTransactions(kind, code) {
       const sign = isRefund ? '−' : '+';
       const color = isRefund ? 'var(--color-danger)' : 'var(--color-success)';
       return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.45rem 0.65rem;border-bottom:1px solid #F1F5F9;font-size:0.76rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.45rem 0.65rem;border-bottom:1px solid var(--border-light);font-size:0.76rem;">
           <div>
             <strong style="color:${color}">${isRefund ? 'Hoàn tiền' : 'Thu tiền'} (${escapeHtml(t.paymentMethod)})</strong>
             ${t.referenceCode ? ` · <span class="text-mono">Ref: ${escapeHtml(t.referenceCode)}</span>` : ''}
@@ -552,8 +824,8 @@ async function loadLedgerTransactions(kind, code) {
 }
 
 async function submitLedgerPayment() {
-  if (!activeLedgerContext) return;
-  const amount = parseInt(document.getElementById('ledgerPayAmount')?.value || '0');
+  if (!activeLedgerContext || _ledgerPaySubmitting) return;
+  const amount = parseInt(document.getElementById('ledgerPayAmount')?.value || '0', 10);
   const paymentMethod = document.getElementById('ledgerPayMethod')?.value || 'cash';
   const referenceCode = (document.getElementById('ledgerPayRef')?.value || '').trim();
   const note = (document.getElementById('ledgerPayNote')?.value || '').trim();
@@ -572,6 +844,10 @@ async function submitLedgerPayment() {
   const endpoint = activeLedgerContext.kind === 'booking'
     ? `/api/admin/bookings/${encodeURIComponent(activeLedgerContext.code)}/payments`
     : `/api/admin/orders/${encodeURIComponent(activeLedgerContext.code)}/payments`;
+
+  const btn = document.getElementById('btnSubmitLedgerPay');
+  _ledgerPaySubmitting = true;
+  if (btn) btn.disabled = true;
 
   try {
     const res = await apiFetch(endpoint, {
@@ -592,19 +868,76 @@ async function submitLedgerPayment() {
     }
 
     if (activeLedgerContext.kind === 'booking' && alsoFinish) {
-      await apiFetch(`/api/admin/bookings/${encodeURIComponent(activeLedgerContext.code)}/finish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: 'Đóng ca sau khi thu ngân xác nhận thanh toán' })
-      });
+      let finishOk = false;
+      let finishError = 'Không thể tự động đóng ca sau khi thu tiền.';
+      try {
+        const finishRes = await apiFetch(`/api/admin/bookings/${encodeURIComponent(activeLedgerContext.code)}/finish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: 'Đóng ca sau khi thu ngân xác nhận thanh toán' })
+        });
+        const finishData = await finishRes.json().catch(() => ({}));
+        if (finishRes.ok && finishData.ok) {
+          finishOk = true;
+        } else {
+          finishError = finishData.error || `Máy chủ từ chối đóng ca (HTTP ${finishRes.status}).`;
+        }
+      } catch (_) {
+        finishError = 'Mất kết nối mạng khi đóng ca chơi.';
+      }
+
+      if (!finishOk) {
+        await Promise.all([syncDatabaseFromServer(true), loadAdminShopOrders()]);
+        renderManagement();
+        refreshLedgerModalFields(activeLedgerContext.kind, activeLedgerContext.code);
+        await loadLedgerTransactions(activeLedgerContext.kind, activeLedgerContext.code);
+        const banner = document.getElementById('ledgerPartialFailureBanner');
+        const detail = document.getElementById('ledgerPartialFailureDetail');
+        if (detail) {
+          detail.textContent = `Số tiền ${formatMoney(amount)} ĐÃ ĐƯỢC LƯU vào Sổ cái. Lỗi đóng ca: ${finishError} Vui lòng bấm nút bên dưới để chỉ đóng ca lại mà không tạo bút toán thu trùng.`;
+        }
+        if (banner) banner.style.display = 'block';
+        showToast('Đã thu tiền — Chưa đóng ca', `Đã ghi sổ ${formatMoney(amount)} thành công, nhưng đóng ca thất bại: ${finishError}`, 'warning');
+        return;
+      }
     }
 
-    await syncDatabaseFromServer(true);
+    await Promise.all([syncDatabaseFromServer(true), loadAdminShopOrders()]);
     renderManagement();
     closeModal('modalLedgerSettlement');
     showToast('Đã ghi sổ thu tiền!', `Đã ghi nhận thực thu ${formatMoney(amount)} (${paymentMethod === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}).`, 'success');
   } catch (_) {
     showToast('Lỗi kết nối', 'Không thể lưu bút toán thu tiền.', 'error');
+  } finally {
+    _ledgerPaySubmitting = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function retryLedgerFinishOnly() {
+  if (!activeLedgerContext || activeLedgerContext.kind !== 'booking') return;
+  const retryBtn = document.getElementById('btnRetryLedgerFinishOnly');
+  if (retryBtn) retryBtn.disabled = true;
+  try {
+    const finishRes = await apiFetch(`/api/admin/bookings/${encodeURIComponent(activeLedgerContext.code)}/finish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: 'Đóng ca sau khi thu ngân xác nhận thanh toán' })
+    });
+    const finishData = await finishRes.json().catch(() => ({}));
+    if (!finishRes.ok || !finishData.ok) {
+      showToast('Chưa thể đóng ca', finishData.error || 'Vui lòng kiểm tra lại trạng thái ca chơi.', 'error');
+      return;
+    }
+
+    await Promise.all([syncDatabaseFromServer(true), loadAdminShopOrders()]);
+    renderManagement();
+    closeModal('modalLedgerSettlement');
+    showToast('Đã đóng ca sân!', `Ca ${activeLedgerContext.code} đã đóng thành công (không phát sinh bút toán thu tiền mới).`, 'success');
+  } catch (_) {
+    showToast('Lỗi kết nối', 'Không thể đóng ca sân lúc này.', 'error');
+  } finally {
+    if (retryBtn) retryBtn.disabled = false;
   }
 }
 
@@ -646,7 +979,7 @@ async function submitLedgerRefund() {
       return;
     }
 
-    await syncDatabaseFromServer(true);
+    await Promise.all([syncDatabaseFromServer(true), loadAdminShopOrders()]);
     renderManagement();
     closeModal('modalLedgerSettlement');
     showToast('Đã ghi sổ hoàn tiền', `Đã hoàn ${formatMoney(amount)} cho đơn ${activeLedgerContext.code}.`, 'success');
@@ -668,7 +1001,7 @@ async function cancelStandaloneOrder(orderCode) {
       showToast('Không thể hủy đơn', data.error || 'Đơn đã thu tiền cần hoàn tiền trước khi hủy.', 'error');
       return;
     }
-    await syncDatabaseFromServer(true);
+    await Promise.all([syncDatabaseFromServer(true), loadAdminShopOrders()]);
     renderManagement();
     showToast('Đã hủy đơn & hoàn kho', `Đơn ${orderCode} đã hủy và cộng lại số lượng tồn kho.`, 'success');
   } catch (_) {
@@ -682,11 +1015,42 @@ function selectLockCourt(id) {
 }
 
 async function lockCourt() {
-  const court = getCourtById(lockSelectedCourt) || { id: Number(lockSelectedCourt) || 1, name: getCourtDisplayName(lockSelectedCourt) };
+  if (!COURTS.length) {
+    showToast('Chưa có sân khả dụng', 'Hệ thống chưa tải được danh sách sân đang hoạt động từ SQL Server.', 'error');
+    return;
+  }
+  const court = getCourtById(lockSelectedCourt);
+  if (!court) {
+    showToast('Sân không hợp lệ', 'Vui lòng chọn lại sân cần khóa trước khi áp dụng.', 'error');
+    return;
+  }
+
+  const { openStr, openMins, closeStr, closeMins } = getClubOperatingWindowMinutes();
   const date = document.getElementById('lockDate')?.value || getTodayStr();
-  const startTime = document.getElementById('lockStart')?.value || '12:00';
-  const duration = Number(document.getElementById('lockDuration')?.value) || 60;
+  const durRaw = document.getElementById('lockDuration')?.value || '60';
+  const isFullDay = durRaw === 'full_day';
+  const startTime = isFullDay ? openStr : (document.getElementById('lockStart')?.value || openStr);
+  const duration = isFullDay ? (closeMins - openMins) : (Number(durRaw) || 60);
+  const startMins = timeToMinutes(startTime);
+  const endMins = startMins + duration;
+
+  if (date < getTodayStr()) {
+    showToast('Ngày khóa không hợp lệ', 'Không thể tạo khóa bảo trì cho ngày trong quá khứ.', 'warning');
+    return;
+  }
+
+  if (endMins > 24 * 60 || endMins > closeMins) {
+    showToast(
+      'Khung giờ khóa vượt giới hạn',
+      `Khung khóa (${startTime} + ${duration}p) vượt quá giờ đóng cửa ${closeStr}. Vui lòng chọn giờ sớm hơn hoặc chọn "Cả ngày".`,
+      'warning'
+    );
+    return;
+  }
+
   const reason = (document.getElementById('lockReason')?.value || 'Bảo dưỡng định kỳ').trim();
+  const btn = document.getElementById('btnCreateCourtLock');
+  if (btn) btn.disabled = true;
 
   try {
     const res = await apiFetch('/api/admin/court-locks', {
@@ -706,10 +1070,12 @@ async function lockCourt() {
       return;
     }
     await syncDatabaseFromServer(true);
-    showToast('Đã khóa sân', `${court.name} đã tạm khóa (${startTime}, ${duration}p) để: ${reason}`, 'warning');
+    showToast('Đã khóa sân', `${court.name} đã tạm khóa (${startTime} → ${minutesToTime(endMins)}, ${duration}p) để: ${reason}`, 'warning');
     renderManagement();
   } catch (_) {
     showToast('Lỗi kết nối', 'Không thể áp dụng lệnh khóa sân.', 'error');
+  } finally {
+    if (btn) btn.disabled = !HAS_SERVER_STATE || !COURTS.length;
   }
 }
 
@@ -842,7 +1208,8 @@ function renderPosMenu() {
                onerror="this.onerror=null;this.src='/assets/products/placeholder-default.svg';" />
         </div>
         <div class="pos-menu-item-name">${escapeHtml(item.name)}</div>
-        <div class="pos-menu-item-price text-mono">${formatMoney(item.price)} <span style="font-size:0.65rem;color:var(--text-muted)">(${outOfStock ? 'Hết' : `Kho: ${stock}`})</span></div>
+        <div class="pos-menu-item-price text-mono" style="white-space:nowrap;">${formatMoney(item.price)}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted);white-space:nowrap;">(${outOfStock ? 'Hết hàng' : `Kho: ${stock}`})</div>
       </button>
     `;
   }).join('');
@@ -935,6 +1302,7 @@ document.addEventListener('DOMContentLoaded', initManagement);
 window.addEventListener('pickleball:db-synced', () => {
   populateLockStartOptions();
   renderManagement();
+  loadAdminShopOrders();
 });
 window.addEventListener('pickleball:sync-state', () => {
   renderManagement();

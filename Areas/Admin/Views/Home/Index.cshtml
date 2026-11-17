@@ -87,7 +87,7 @@
             <div class="card-body">
                 <div class="match-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.15rem;">
 
-                    <a href="/Management" class="card" style="text-decoration:none;color:inherit;padding:1.35rem;border:1.5px solid #E2E8F0;transition:all 0.2s;">
+                    <a href="/Management" class="sh-module-card">
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                             <div style="width:42px;height:42px;border-radius:10px;background:rgba(255,85,32,0.12);color:var(--color-primary);display:flex;align-items:center;justify-content:center;">
                                 <iconify-icon icon="lucide:sliders-horizontal" width="22"></iconify-icon>
@@ -98,7 +98,7 @@
                         <p class="text-xs text-muted">Duyệt yêu cầu đặt lịch, kích hoạt ca chơi, ghi nhận thu tiền / hoàn tiền và đơn lẻ Pro Shop.</p>
                     </a>
 
-                    <a href="/Admin/Bookings" class="card" style="text-decoration:none;color:inherit;padding:1.35rem;border:1.5px solid #E2E8F0;transition:all 0.2s;">
+                    <a href="/Admin/Bookings" class="sh-module-card">
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                             <div style="width:42px;height:42px;border-radius:10px;background:rgba(59,130,246,0.12);color:#2563EB;display:flex;align-items:center;justify-content:center;">
                                 <iconify-icon icon="lucide:calendar-clock" width="22"></iconify-icon>
@@ -109,7 +109,7 @@
                         <p class="text-xs text-muted">Tạo lịch đặt sân tại quầy, duyệt nhanh, đóng ca hoặc ghi sổ thu/hoàn tiền từng vé.</p>
                     </a>
 
-                    <a href="/Reports" class="card" style="text-decoration:none;color:inherit;padding:1.35rem;border:1.5px solid #E2E8F0;transition:all 0.2s;">
+                    <a href="/Reports" class="sh-module-card">
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                             <div style="width:42px;height:42px;border-radius:10px;background:rgba(14,165,233,0.12);color:#0284C7;display:flex;align-items:center;justify-content:center;">
                                 <iconify-icon icon="lucide:bar-chart-3" width="22"></iconify-icon>
@@ -122,7 +122,7 @@
 
                     @if (isStrictAdmin)
                     {
-                        <a href="/Admin/Courts" class="card" style="text-decoration:none;color:inherit;padding:1.35rem;border:1.5px solid #E2E8F0;transition:all 0.2s;">
+                        <a href="/Admin/Courts" class="sh-module-card">
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                                 <div style="width:42px;height:42px;border-radius:10px;background:rgba(16,185,129,0.12);color:#059669;display:flex;align-items:center;justify-content:center;">
                                     <iconify-icon icon="lucide:map-pin" width="22"></iconify-icon>
@@ -133,7 +133,7 @@
                             <p class="text-xs text-muted">Cập nhật thông tin mặt sân, phân loại Indoor/Outdoor, đơn giá cơ bản và phụ thu.</p>
                         </a>
 
-                        <a href="/Admin/Products" class="card" style="text-decoration:none;color:inherit;padding:1.35rem;border:1.5px solid #E2E8F0;transition:all 0.2s;">
+                        <a href="/Admin/Products" class="sh-module-card">
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                                 <div style="width:42px;height:42px;border-radius:10px;background:rgba(245,158,11,0.14);color:#D97706;display:flex;align-items:center;justify-content:center;">
                                     <iconify-icon icon="lucide:shopping-bag" width="22"></iconify-icon>
@@ -144,7 +144,7 @@
                             <p class="text-xs text-muted">Thêm, sửa tồn kho đồ uống bù khoáng, đồ ăn nhẹ và dịch vụ cho thuê vợt/bóng.</p>
                         </a>
 
-                        <a href="/Admin/Accounts" class="card" style="text-decoration:none;color:inherit;padding:1.35rem;border:1.5px solid #E2E8F0;transition:all 0.2s;">
+                        <a href="/Admin/Accounts" class="sh-module-card">
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                                 <div style="width:42px;height:42px;border-radius:10px;background:rgba(236,72,153,0.12);color:#DB2777;display:flex;align-items:center;justify-content:center;">
                                     <iconify-icon icon="lucide:users" width="22"></iconify-icon>
@@ -155,7 +155,7 @@
                             <p class="text-xs text-muted">Cấp tài khoản mật khẩu ngẫu nhiên 1 lần, khóa phiên tức thì và phân quyền Admin/Staff.</p>
                         </a>
 
-                        <a href="/Cms" class="card" style="text-decoration:none;color:inherit;padding:1.35rem;border:1.5px solid #E2E8F0;transition:all 0.2s;">
+                        <a href="/Cms" class="sh-module-card">
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
                                 <div style="width:42px;height:42px;border-radius:10px;background:rgba(139,92,246,0.12);color:#7C3AED;display:flex;align-items:center;justify-content:center;">
                                     <iconify-icon icon="lucide:settings" width="22"></iconify-icon>
@@ -216,8 +216,8 @@
                                     <td>@(item.Court?.CourtName ?? "Sân " + item.CourtId)</td>
                                     <td class="text-mono">@item.BookingDate · @item.StartTime (@(item.Duration)p)</td>
                                     <td>
-                                        <div class="text-mono" style="font-weight:700;color:#0F172A;">@string.Format("{0:N0} đ", amountDue)</div>
-                                        <div class="text-mono" style="font-size:0.75rem;color:@(paidAmt >= amountDue && amountDue > 0 ? "#059669" : "#64748B");">Đã thu: @string.Format("{0:N0} đ", paidAmt)</div>
+                                        <div class="text-mono" style="font-weight:700;color:var(--text-primary);">@string.Format("{0:N0} đ", amountDue)</div>
+                                        <div class="text-mono" style="font-size:0.75rem;color:@(paidAmt >= amountDue && amountDue > 0 ? "var(--color-success)" : "var(--text-muted)");">Đã thu: @string.Format("{0:N0} đ", paidAmt)</div>
                                     </td>
                                     <td>
                                         @if (item.Status == "pending")

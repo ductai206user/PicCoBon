@@ -302,18 +302,24 @@ function initMenu() {
 
 function populateActiveBookingOptions() {
   const sel = document.getElementById('shopOrderBooking');
+  const hintEl = document.getElementById('shopOrderBookingHint');
   if (!sel) return;
 
   const currentVal = sel.value;
   const user = getCurrentUser();
   const today = getTodayStr();
 
-  const attachable = BOOKINGS.filter(b => {
-    const isPlayingOrApproved = (b.status === 'playing' || b.status === 'approved') && b.date >= today;
-    if (!isPlayingOrApproved) return false;
+  const candidateUserBookings = BOOKINGS.filter(b => {
+    if (!b || (b.status !== 'playing' && b.status !== 'approved')) return false;
     if (!user) return false;
     if (user.role === 'admin' || user.role === 'staff') return true;
     return Number(b.accountId) === Number(user.id) || (user.phone && b.phone === user.phone);
+  });
+
+  // FIX-03: Khớp tuyệt đối với điều kiện máy chủ (OrderService): cùng ngày hôm nay (giờ VN) và chưa kết thúc.
+  const attachable = candidateUserBookings.filter(b => {
+    if (b.date !== today) return false;
+    return getBookingTimingState(b).phase !== 'ended';
   });
 
   let html = `<option value="">-- Mua lẻ / Nhận trực tiếp tại quầy --</option>`;
@@ -329,6 +335,20 @@ function populateActiveBookingOptions() {
   sel.innerHTML = html;
   if ([...sel.options].some(o => o.value === currentVal)) {
     sel.value = currentVal;
+  }
+
+  if (hintEl) {
+    const excludedFutureOrEnded = candidateUserBookings.length - attachable.length;
+    if (user && excludedFutureOrEnded > 0 && user.role !== 'admin' && user.role !== 'staff') {
+      hintEl.textContent = `Chỉ hỗ trợ gộp đồ vào ca sân Hôm nay (${formatDateVN(today)}) chưa kết thúc. Bạn có ${excludedFutureOrEnded} lịch ngày khác hoặc đã hết giờ nên không thể gộp.`;
+      hintEl.style.display = 'block';
+    } else if (!user) {
+      hintEl.textContent = 'Đơn mua lẻ thanh toán trực tiếp tại quầy nhận đồ; đơn gộp sân cần mã đặt sân hợp lệ trong hôm nay.';
+      hintEl.style.display = 'block';
+    } else {
+      hintEl.textContent = '';
+      hintEl.style.display = 'none';
+    }
   }
   toggleGuestBookingAttach();
 }
@@ -751,8 +771,9 @@ async function submitShopOrder() {
     return;
   }
 
-  if (phone && !isValidVietnamPhone(phone)) {
-    showToast('Số điện thoại không hợp lệ', 'Vui lòng nhập đúng 10 chữ số (bắt đầu bằng 0).', 'error');
+  if (!isValidVietnamPhone(phone)) {
+    showToast('Số điện thoại không hợp lệ', 'Vui lòng nhập đúng số điện thoại 10 chữ số (bắt đầu bằng 0 hoặc +84).', 'error');
+    document.getElementById('shopOrderPhone')?.focus();
     return;
   }
 
@@ -764,20 +785,20 @@ async function submitShopOrder() {
       ? window.crypto.randomUUID()
       : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-    const res = await apiFetch('/api/orders', {
+    const res = await apiFetch('/api/orders/create', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         customerName,
         phone,
-        deliveryNote: deliveryNote || 'Nhận tại quầy Pro Shop',
+        address: deliveryNote || 'Nhận tại quầy Pro Shop',
         bookingCode: bookingCode || null,
         bookingAccessToken: bookingAccessToken || null,
         paymentMethod: 'cash',
-        items: quickShopCart.map(r => ({ productId: r.id, quantity: r.qty }))
+        idempotencyKey,
+        items: quickShopCart.map(r => ({ productId: r.id, qty: r.qty }))
       })
     });
 
@@ -801,7 +822,7 @@ async function submitShopOrder() {
     document.getElementById('ordSuccessName').textContent = `${ord.customerName} ${ord.phone ? `(${ord.phone})` : ''}`;
     document.getElementById('ordSuccessDelivery').textContent = ord.bookingCode
       ? `Đã gộp vào công nợ đặt sân #${ord.bookingCode}`
-      : `${ord.deliveryNote} (Thanh toán tại quầy)`;
+      : `${ord.address || deliveryNote || 'Nhận tại quầy Pro Shop'} (Thanh toán tại quầy)`;
     document.getElementById('ordSuccessTotal').textContent = formatMoney(ord.totalAmount);
 
     openModal('modalShopOrder');

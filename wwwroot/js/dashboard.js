@@ -46,7 +46,7 @@ function renderDashboard() {
   const openStr = CMS_CONFIG.openTime || '06:00';
   const closeStr = CMS_CONFIG.closeTime || '22:00';
   const peakStartStr = CMS_CONFIG.peakStart || '17:00';
-  const peakExtra = Number(CMS_CONFIG.peakSurcharge) ?? 30000;
+  const peakExtra = resolveNumericConfig(CMS_CONFIG.peakSurcharge, 30000);
 
   const heroOpenEl = document.getElementById('heroOpenHours');
   if (heroOpenEl) heroOpenEl.textContent = `${openStr} – ${closeStr}`;
@@ -175,7 +175,7 @@ function renderDashboard() {
 
   const liveCountTag = document.getElementById('heroLiveCountTag');
   if (liveCountTag) {
-    liveCountTag.textContent = `Trạng thái ${COURTS.length} sân trực tiếp`;
+    liveCountTag.innerHTML = `Trạng thái <span data-cms="courtCount">${COURTS.length}</span> sân trực tiếp`;
   }
 
   // 1. Hero Mini Court Status Grid
@@ -470,7 +470,7 @@ function renderDashboard() {
             tbody += `<td class="matrix-cell ${cls}" title="${escapeAttr(tip)}">${label}</td>`;
           }
         } else if (isPast) {
-          tbody += `<td class="matrix-cell" style="color:var(--text-muted);background:#F8FAFC;font-size:0.72rem;" title="Đã qua giờ">Qua giờ</td>`;
+          tbody += `<td class="matrix-cell" style="color:var(--text-muted);background:var(--bg-surface-alt);font-size:0.72rem;" title="Đã qua giờ">Qua giờ</td>`;
         } else {
           const targetUrl = `/Booking?court=${Number(court.id)}&date=${encodeURIComponent(todayISO)}&time=${encodeURIComponent(timeStr)}`;
           tbody += `<td class="matrix-cell free" onclick="window.location.href='${escapeAttr(targetUrl)}'">

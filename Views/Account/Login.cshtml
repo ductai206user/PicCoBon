@@ -1,8 +1,11 @@
+@using Microsoft.EntityFrameworkCore
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject PickleballClub.Models.PickleballContext SsrDb
 @{
     Layout = null;
     var csrfTokens = Antiforgery.GetAndStoreTokens(Context);
     var serverAuthError = TempData["AuthError"] as string;
+    int activeCourtCount = await SsrDb.TbCourts.AsNoTracking().CountAsync(c => c.IsActive);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -11,6 +14,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="@csrfTokens.RequestToken">
   <title>Đăng nhập &amp; Đăng ký — Spike Pickleball Club</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23D8F826'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/css/styles.css">
   <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   <style>
@@ -1267,7 +1271,7 @@
           <div>
             <h2 class="overlay-headline">Sẵn Sàng Trở Lại <em>Sân Đấu</em> Ngay Hôm Nay!</h2>
             <p class="overlay-desc">
-              Đăng nhập bằng tài khoản của bạn để kiểm tra lịch trống 4 sân trực tiếp, mở mã QR Check-in tại quầy và chia tiền sân tự động cùng đồng đội.
+              Đăng nhập bằng tài khoản của bạn để kiểm tra lịch trống @activeCourtCount sân trực tiếp, mở mã QR Check-in tại quầy và chia tiền sân tự động cùng đồng đội.
             </p>
           </div>
 
@@ -1284,7 +1288,7 @@
         <div class="overlay-panel overlay-right">
           <div class="floating-ball-badge">
             <div class="spinning-pickleball"></div>
-            <span style="font-size:0.74rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#FFF;">4 Sân Trong Nhà &amp; Ngoài Trời · LED 1000 Lux</span>
+            <span style="font-size:0.74rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#FFF;">@activeCourtCount Sân Trong Nhà &amp; Ngoài Trời · LED 1000 Lux</span>
           </div>
 
           <div>

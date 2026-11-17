@@ -69,13 +69,14 @@
 
                     <div class="shop-checkout-form">
                         <div class="form-group">
-                            <label class="form-label" for="shopOrderBooking">Hình thức thanh toán / Gộp vào sân</label>
+                            <label class="form-label" for="shopOrderBooking">Nhận đồ tại quầy / Gộp vào sân đang chơi</label>
                             <select id="shopOrderBooking" class="form-select" onchange="toggleGuestBookingAttach()">
                                 <option value="">-- Mua lẻ / Nhận trực tiếp tại quầy --</option>
                             </select>
+                            <div id="shopOrderBookingHint" class="text-xs text-muted" style="margin-top:0.35rem;display:none;"></div>
                         </div>
 
-                        <div id="guestBookingAttachFields" style="display:none;padding:0.65rem;background:#F8FAFC;border:1px solid var(--border-color);border-radius:var(--radius-xs);margin-bottom:0.75rem;">
+                        <div id="guestBookingAttachFields" class="sh-subtle-panel" style="display:none;padding:0.65rem;margin-bottom:0.75rem;">
                             <div class="form-group" style="margin-bottom:0.5rem;">
                                 <label class="form-label text-xs" for="shopGuestBookingCode">Mã đặt sân đang chơi / đã duyệt *</label>
                                 <input type="text" id="shopGuestBookingCode" class="form-input text-mono" placeholder="VD: PB-2611A9">
