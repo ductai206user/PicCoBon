@@ -8,28 +8,13 @@
     var placeholderUrl = ProductImageService.GetCategoryPlaceholderUrl(categoryAlias);
     var resolvedCurrentImg = ProductImageService.NormalizeProductImageUrl(Model.ExistingImage, categoryAlias);
     var hasCustomImage = ProductImageService.HasCustomProductImage(Model.ExistingImage);
+    ViewData["AdminHeaderTitle"] = $"Cập nhật sản phẩm #{Model.ProductId}";
+    ViewData["AdminHeaderSubtitle"] = "Chỉnh sửa thông tin, tồn kho và hình ảnh sản phẩm Pro Shop / POS.";
+    ViewData["AdminHeaderBackUrl"] = "/Admin/Products";
 }
 
-<div class="content-wrapper">
-    <section class="content-header">
-        <div class="container-fluid">
-            <div class="row mb-2 align-items-center">
-                <div class="col-sm-6">
-                    <h1 class="m-0 font-weight-bold">Cập nhật sản phẩm #@Model.ProductId</h1>
-                    <small class="text-muted">Chỉnh sửa thông tin, tồn kho và hình ảnh sản phẩm Pro Shop / POS.</small>
-                </div>
-                <div class="col-sm-6 text-sm-right mt-2 mt-sm-0">
-                    <a asp-action="Index" class="btn btn-outline btn-sm">
-                        <iconify-icon icon="lucide:arrow-left" width="15"></iconify-icon>
-                        <span>Quay lại danh sách</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </section>
+@await Html.PartialAsync("~/Areas/Admin/Views/Shared/_AdminPageHeader.cshtml")
 
-    <section class="content">
-        <div class="container-fluid">
             <form asp-action="Edit" asp-route-id="@Model.ProductId" method="post" enctype="multipart/form-data" id="adminProductEditForm" novalidate>
                 <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
                 <input type="hidden" asp-for="ProductId" />
@@ -164,9 +149,9 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="card-footer bg-white d-flex justify-content-end" style="gap: 8px;">
-                                <a asp-action="Index" class="btn btn-outline">Quay lại</a>
-                                <button type="submit" class="btn btn-primary font-weight-bold" data-testid="admin-product-submit">
+                            <div class="card-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border-default);background:var(--surface);">
+                                <a asp-action="Index" class="btn btn-secondary">Quay lại</a>
+                                <button type="submit" class="btn btn-primary" data-testid="admin-product-submit">
                                     <iconify-icon icon="lucide:save" width="15"></iconify-icon>
                                     <span>Lưu cập nhật</span>
                                 </button>
@@ -175,9 +160,6 @@
                     </div>
                 </div>
             </form>
-        </div>
-    </section>
-</div>
 
 @section Scripts {
     <script>

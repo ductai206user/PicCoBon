@@ -6,43 +6,32 @@
     Layout = "~/Areas/Admin/Views/Shared/_Layout.cshtml";
 }
 
-<div class="content-wrapper">
-    <section class="content-header">
-        <div class="container-fluid">
-            <div class="row mb-2 align-items-center">
-                <div class="col-sm-6">
-                    <h1 class="m-0 font-weight-bold">Quản lý sản phẩm (Pro Shop / POS)</h1>
-                    <small class="text-muted">Quản lý hình ảnh sản phẩm, giá bán và tồn kho đồng bộ trực tiếp với Pro Shop &amp; Quầy POS.</small>
-                </div>
-                <div class="col-sm-6 text-sm-right mt-2 mt-sm-0">
-                    <a asp-action="Create" class="btn btn-primary" data-testid="admin-btn-create-product">
-                        <iconify-icon icon="lucide:plus" width="16"></iconify-icon>
-                        <span>Thêm sản phẩm mới</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </section>
+<div class="sn-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border-default);">
+    <div>
+        <h1 class="sn-h1" style="margin:0;font-size:1.65rem;font-weight:700;">Quản lý sản phẩm Pro Shop &amp; POS</h1>
+        <p style="margin:5px 0 0;color:var(--text-secondary);font-size:0.9rem;">Quản lý ảnh packshot, đơn giá và tồn kho đồng bộ trực tiếp với Pro Shop &amp; quầy POS.</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary btn-sm" data-testid="admin-btn-create-product">
+        <iconify-icon icon="lucide:plus" width="15"></iconify-icon>
+        <span>Thêm sản phẩm mới</span>
+    </a>
+</div>
 
-    <section class="content">
-        <div class="container-fluid">
             @if (TempData["SuccessMessage"] is string successMsg && !string.IsNullOrWhiteSpace(successMsg))
             {
-                <div class="alert alert-success alert-dismissible fade show" role="alert" data-testid="admin-product-alert-success">
-                    <span class="d-flex align-items-center" style="gap:6px;">
-                        <iconify-icon icon="lucide:check-circle-2" width="16"></iconify-icon>
-                        <span>@successMsg</span>
-                    </span>
+                <div class="sn-alert sn-alert-success" style="margin-bottom:16px;" role="alert" data-testid="admin-product-alert-success">
+                    <iconify-icon icon="lucide:check-circle-2" width="16"></iconify-icon>
+                    <span>@successMsg</span>
                 </div>
             }
 
-            <div class="card shadow-sm">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <h3 class="card-title font-weight-bold mb-0">Danh mục mặt hàng Pro Shop (@Model.Count() sản phẩm)</h3>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Danh mục mặt hàng Pro Shop (@Model.Count() sản phẩm)</h3>
                 </div>
-                <div class="card-body table-responsive p-0">
-                    <table class="table table-hover text-nowrap align-middle mb-0" data-testid="admin-products-table">
-                        <thead class="thead-light">
+                <div class="sn-table-wrap">
+                    <table class="sn-table" data-testid="admin-products-table">
+                        <thead>
                             <tr>
                                 <th style="width: 60px;">ID</th>
                                 <th style="width: 110px;">Ảnh SP</th>
@@ -123,13 +112,13 @@
                                         }
                                     </td>
                                     <td class="align-middle">
-                                        <div class="d-flex align-items-center" style="gap:6px;">
-                                            <a asp-action="Edit" asp-route-id="@item.ProductId" class="btn btn-sm btn-info" data-testid="admin-edit-product-@item.ProductId">
-                                                <iconify-icon icon="lucide:pencil" width="14"></iconify-icon>
+                                        <div style="display:flex;align-items:center;gap:6px;">
+                                            <a asp-action="Edit" asp-route-id="@item.ProductId" class="btn btn-xs btn-secondary" data-testid="admin-edit-product-@item.ProductId">
+                                                <iconify-icon icon="lucide:pencil" width="13"></iconify-icon>
                                                 <span>Sửa</span>
                                             </a>
-                                            <a asp-action="Delete" asp-route-id="@item.ProductId" class="btn btn-sm btn-danger-outline" data-testid="admin-delete-product-@item.ProductId">
-                                                <iconify-icon icon="lucide:trash-2" width="14"></iconify-icon>
+                                            <a asp-action="Delete" asp-route-id="@item.ProductId" class="btn btn-xs btn-danger" data-testid="admin-delete-product-@item.ProductId">
+                                                <iconify-icon icon="lucide:trash-2" width="13"></iconify-icon>
                                                 <span>Xoá</span>
                                             </a>
                                         </div>
@@ -140,6 +129,3 @@
                     </table>
                 </div>
             </div>
-        </div>
-    </section>
-</div>

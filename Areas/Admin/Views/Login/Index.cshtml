@@ -4,71 +4,61 @@
     var authError = TempData["AuthError"] as string;
 }
 <!DOCTYPE html>
-<html lang="vi" data-theme="dark">
+<html lang="vi" data-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Đăng Nhập Quản Trị — Spike Pickleball Admin</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23D8F826'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="~/css/styles.css" asp-append-version="true">
+    <title>Đăng Nhập Quản Trị — Spike Pickleball Workspace</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23FFFFFF'/%3E%3C/svg%3E">
+    @await Html.PartialAsync("~/Views/Shared/_DesignSystemCss.cshtml")
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
     <style>
         body.sh-auth-body {
             min-height: 100vh;
-            background: radial-gradient(circle at 20% 20%, rgba(255, 85, 32, 0.14), transparent 45%),
-                        radial-gradient(circle at 80% 80%, rgba(216, 248, 38, 0.08), transparent 45%),
-                        #090D16;
-            color: #F8FAFC;
+            background: var(--surface-secondary, #F6F5F4);
+            color: var(--text-primary, #111827);
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1.5rem;
+            padding: 24px 16px;
         }
         .sh-auth-card {
             width: 100%;
             max-width: 420px;
-            background: #111827;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 14px;
-            padding: 2rem 1.85rem;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+            background: var(--surface, #FFFFFF);
+            border: 1px solid var(--border-default, #E5E7EB);
+            border-radius: 12px;
+            padding: 32px 28px;
+            box-shadow: var(--shadow-float, 0 4px 18px rgba(0,0,0,0.06));
         }
-        .sh-auth-head {
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
+        .sh-auth-head { text-align: center; margin-bottom: 22px; }
         .sh-auth-logo {
-            width: 46px;
-            height: 46px;
+            width: 44px;
+            height: 44px;
             border-radius: 10px;
-            background: var(--color-primary, #FF5520);
+            background: var(--brand-primary, #FF5520);
             color: #FFFFFF;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 0.75rem;
-            box-shadow: 0 8px 20px rgba(255, 85, 32, 0.35);
+            margin-bottom: 12px;
         }
         .sh-auth-title {
-            font-family: var(--font-sans);
-            font-size: 1.45rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            color: #F8FAFC;
-            line-height: 1.2;
-            margin-bottom: 0.25rem;
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            color: var(--text-primary, #111827);
+            margin: 0 0 4px;
         }
-        .sh-auth-sub {
-            font-size: 0.82rem;
-            color: #94A3B8;
-        }
+        .sh-auth-sub { font-size: 0.85rem; color: var(--text-secondary, #615D59); margin: 0; }
     </style>
 </head>
 <body class="sh-auth-body">
     <div class="sh-auth-card">
         <div class="sh-auth-head">
             <div class="sh-auth-logo">
-                <iconify-icon icon="mdi:racquetball" width="24"></iconify-icon>
+                <iconify-icon icon="mdi:racquetball" width="22"></iconify-icon>
             </div>
             <h1 class="sh-auth-title">Cổng Quản Trị CLB</h1>
             <p class="sh-auth-sub">Đăng nhập hệ thống điều hành Spike Pickleball Club</p>
@@ -77,30 +67,30 @@
         <form asp-area="Admin" asp-controller="Login" asp-action="Index" method="post">
             @Html.AntiForgeryToken()
             <div class="form-group">
-                <label class="form-label" style="color:#E2E8F0;">Tài khoản / Email / SĐT</label>
-                <input type="text" asp-for="Username" class="form-input" placeholder="Nhập tên đăng nhập hoặc Email" required>
+                <label class="form-label" for="adminLoginUser">Tài khoản / Email / SĐT</label>
+                <input type="text" id="adminLoginUser" asp-for="Username" class="form-input" placeholder="Nhập tên đăng nhập hoặc Email" required>
             </div>
             <div class="form-group">
-                <label class="form-label" style="color:#E2E8F0;">Mật khẩu</label>
-                <input type="password" asp-for="Password" class="form-input" placeholder="Nhập mật khẩu" required>
+                <label class="form-label" for="adminLoginPass">Mật khẩu</label>
+                <input type="password" id="adminLoginPass" asp-for="Password" class="form-input" placeholder="Nhập mật khẩu" required>
             </div>
 
             @if (!string.IsNullOrEmpty(authError))
             {
-                <div class="sh-alert-danger" style="padding:0.65rem 0.9rem;margin-bottom:1rem;font-size:0.82rem;">
+                <div class="sn-alert sn-alert-danger" style="margin-bottom:14px;font-size:0.84rem;">
                     @authError
                 </div>
             }
 
-            <button type="submit" class="btn btn-primary btn-block btn-lg" style="margin-top:0.5rem;">
+            <button type="submit" class="btn btn-primary btn-block btn-lg" style="margin-top:8px;">
                 <iconify-icon icon="lucide:log-in" width="17"></iconify-icon>
                 <span>Đăng nhập Quản trị</span>
             </button>
         </form>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.25rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.1);font-size:0.8rem;">
-            <a href="/Account/Login" style="color:var(--color-volt);font-weight:600;text-decoration:none;">Trang Đăng nhập chính</a>
-            <a href="/" style="color:#94A3B8;text-decoration:none;">← Trang chủ</a>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:14px;border-top:1px solid var(--border-default);font-size:0.82rem;">
+            <a href="/Account/Login" style="color:var(--brand-primary-ink);font-weight:600;text-decoration:none;">Trang Đăng nhập chính</a>
+            <a href="/" style="color:var(--text-secondary);text-decoration:none;">← Trang chủ</a>
         </div>
     </div>
 </body>

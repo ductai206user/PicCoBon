@@ -10,19 +10,16 @@
     string ssrPeakTotalNum = (ssrSettings.BaseCourtPrice + ssrSettings.PeakSurchargePerHour).ToString("#,0", vndFmt);
 }
 
-  <section class="page-hero">
-    <div class="container page-hero-inner">
-      <div>
-        <span class="section-kicker" style="color:var(--color-volt);">Quản trị hệ thống (Chỉ Admin)</span>
-        <h1 class="page-hero-title">Cấu Hình Bảng Giá, Giờ Mở Cửa &amp; Nội Dung Website</h1>
-        <p class="page-hero-sub">Thay đổi tại đây cập nhật trực tiếp nguồn dữ liệu chuẩn máy chủ (PricingVersion) cho toàn bộ trang Đặt sân &amp; Báo giá</p>
-      </div>
-      <div style="display:flex;gap:0.65rem;flex-wrap:wrap">
-        <a href="/Admin" class="btn btn-secondary btn-sm" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:#FFF;">Tổng quan Quản trị</a>
-        <a href="/" class="btn btn-primary btn-sm">Xem trang chủ</a>
-      </div>
+<div class="sn-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border-default);">
+    <div>
+        <h1 class="sn-h1" style="margin:0;font-size:1.65rem;font-weight:700;">Cấu hình Bảng giá, Giờ mở cửa &amp; Nội dung Website</h1>
+        <p style="margin:5px 0 0;color:var(--text-secondary);font-size:0.9rem;">Thay đổi tại đây cập nhật nguồn dữ liệu máy chủ (PricingVersion) cho toàn bộ trang Đặt sân &amp; Báo giá.</p>
     </div>
-  </section>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="/Admin" class="btn btn-secondary btn-sm">Tổng quan</a>
+        <a href="/" class="btn btn-primary btn-sm">Xem trang chủ</a>
+    </div>
+</div>
 
   <main class="page-main">
     <div class="container">
@@ -120,11 +117,11 @@
             <span class="badge badge-success">Server Sync</span>
           </div>
           <div class="card-body stack-sm">
-            <div style="background:#0A0E17;border-radius:var(--radius-sm);padding:1.25rem;color:#fff;display:flex;flex-direction:column;gap:0.45rem">
-              <span id="prevHeroTag" style="font-size:0.65rem;font-weight:800;background:var(--color-primary);color:#FFF;padding:2px 8px;border-radius:99px;align-self:flex-start">TAG</span>
-              <span id="prevHeroSubtag" style="font-size:0.72rem;color:var(--color-volt)">Subtag</span>
-              <h4 id="prevHeroTitle" style="color:#fff;font-size:1.1rem;font-weight:700">Tiêu đề</h4>
-              <p id="prevHeroSubtitle" style="font-size:0.78rem;color:#CBD5E1">Mô tả...</p>
+            <div style="background:var(--surface-secondary);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:18px;color:var(--text-primary);display:flex;flex-direction:column;gap:8px">
+              <span id="prevHeroTag" style="font-size:0.72rem;font-weight:650;background:var(--brand-primary-tint);color:var(--brand-primary-ink);border:1px solid var(--brand-primary-border);padding:2px 10px;border-radius:99px;align-self:flex-start">TAG</span>
+              <span id="prevHeroSubtag" style="font-size:0.75rem;color:var(--brand-primary);font-weight:600">Subtag</span>
+              <h4 id="prevHeroTitle" style="color:var(--text-primary);font-size:1.1rem;font-weight:700;margin:0">Tiêu đề</h4>
+              <p id="prevHeroSubtitle" style="font-size:0.82rem;color:var(--text-secondary);margin:0">Mô tả...</p>
             </div>
             <div class="sh-subtle-panel" style="padding:0.9rem;display:flex;justify-content:space-between;align-items:center">
               <span class="text-xs font-semibold">Giá tiêu chuẩn / Giờ vàng:</span>

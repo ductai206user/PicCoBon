@@ -9,24 +9,18 @@
     bool isAdmin = Function.IsAdmin();
 }
 
-<div class="content-wrapper">
-    <section class="content-header">
-        <div class="container-fluid">
-            <div class="row mb-2">
-                <div>
-                    <span class="section-kicker" style="color:var(--color-volt);">Điều hành Lịch Sân &amp; Sổ Quỹ</span>
-                    <h1>Quản lý Đơn Đặt Sân</h1>
-                </div>
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/Admin">Quản trị</a></li>
-                    <li class="breadcrumb-item active">Đơn đặt sân</li>
-                </ol>
-            </div>
-        </div>
-    </section>
+<div class="sn-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border-default);">
+    <div>
+        <h1 class="sn-h1" style="margin:0;font-size:1.65rem;font-weight:700;">Quản lý Đơn Đặt Sân</h1>
+        <p style="margin:5px 0 0;color:var(--text-secondary);font-size:0.9rem;">Tạo đơn Walk-in tại quầy, cập nhật trạng thái ca sân và đối soát thanh toán.</p>
+    </div>
+    <a href="/Management" class="btn btn-secondary btn-sm">
+        <iconify-icon icon="lucide:calendar-range" width="15"></iconify-icon>
+        <span>Về Điều phối Sân</span>
+    </a>
+</div>
 
-    <section class="content">
-        <div class="container-fluid">
+<div class="stack">
 
             @if (!string.IsNullOrEmpty(msgSuccess))
             {
@@ -287,7 +281,4 @@
                     </div>
                 </div>
             </div>
-
-        </div>
-    </section>
 </div>

@@ -199,12 +199,12 @@ function renderDashboard() {
         const statusTxt = isLockedNow ? 'Bảo trì' : isPlayingNow ? 'Đang thi đấu' : isReservedNow ? 'Đã kín giờ này' : 'Đang trống';
         const shortName = String(c.name || '').replace(' (Arena A)', '').replace(' (Arena B)', '');
         return `
-          <a href="/Booking?court=${Number(c.id)}" class="hero-mini-court-item">
+          <a href="/Booking?court=${Number(c.id)}" class="sn-mini-court-item" style="text-decoration:none;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:0.35rem;">
-              <strong style="font-size:0.86rem;color:#FFF;">${escapeHtml(shortName)}</strong>
-              <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;"></span>
+              <strong style="font-size:0.84rem;color:var(--text-primary);">${escapeHtml(shortName)}</strong>
+              <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;" aria-hidden="true"></span>
             </div>
-            <span style="font-size:0.74rem;color:#CBD5E1;">${c.type === 'Indoor' ? 'Sân Indoor mái vòm' : 'Sân Outdoor'} — <strong style="color:#FFFFFF;">${statusTxt}</strong></span>
+            <span style="font-size:0.74rem;color:var(--text-secondary);">${c.type === 'Indoor' ? 'Sân Indoor VIP' : 'Sân Outdoor'} · <strong style="color:var(--text-primary);">${statusTxt}</strong></span>
           </a>
         `;
       }).join('');
@@ -404,8 +404,8 @@ function renderDashboard() {
                 ${badgeHtml}
               </div>
               <div>
-                <h3 style="font-family:var(--font-display);font-size:1.55rem;font-weight:700;text-transform:uppercase;">${escapeHtml(court.name)}</h3>
-                <p style="font-size:0.82rem;color:#E2E8F0;">${escapeHtml(court.typeLabel)} — Mặt sân ${escapeHtml(cleanSurface)}</p>
+                <h3 style="font-family:var(--font-display);font-size:1.35rem;font-weight:700;">${escapeHtml(court.name)}</h3>
+                <p style="font-size:0.82rem;color:#E2E8F0;">${escapeHtml(court.typeLabel)} · Mặt sân ${escapeHtml(cleanSurface)}</p>
               </div>
             </div>
 
@@ -470,7 +470,7 @@ function renderDashboard() {
             tbody += `<td class="matrix-cell ${cls}" title="${escapeAttr(tip)}">${label}</td>`;
           }
         } else if (isPast) {
-          tbody += `<td class="matrix-cell" style="color:var(--text-muted);background:var(--bg-surface-alt);font-size:0.72rem;" title="Đã qua giờ">Qua giờ</td>`;
+          tbody += `<td class="matrix-cell" style="color:var(--text-muted);background:var(--surface-secondary);font-size:0.72rem;" title="Đã qua giờ">Qua giờ</td>`;
         } else {
           const targetUrl = `/Booking?court=${Number(court.id)}&date=${encodeURIComponent(todayISO)}&time=${encodeURIComponent(timeStr)}`;
           tbody += `<td class="matrix-cell free" onclick="window.location.href='${escapeAttr(targetUrl)}'">

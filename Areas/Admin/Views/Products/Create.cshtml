@@ -5,28 +5,13 @@
     ViewData["Title"] = "Thêm mới sản phẩm Pro Shop";
     Layout = "~/Areas/Admin/Views/Shared/_Layout.cshtml";
     var placeholderUrl = ProductImageService.GetCategoryPlaceholderUrl("drink");
+    ViewData["AdminHeaderTitle"] = "Thêm mới sản phẩm Pro Shop";
+    ViewData["AdminHeaderSubtitle"] = "Tải ảnh sản phẩm chất lượng cao (PNG, JPG, WebP) để hiển thị đồng nhất trên Pro Shop & POS.";
+    ViewData["AdminHeaderBackUrl"] = "/Admin/Products";
 }
 
-<div class="content-wrapper">
-    <section class="content-header">
-        <div class="container-fluid">
-            <div class="row mb-2 align-items-center">
-                <div class="col-sm-6">
-                    <h1 class="m-0 font-weight-bold">Thêm mới sản phẩm Pro Shop</h1>
-                    <small class="text-muted">Tải ảnh sản phẩm chất lượng cao (PNG, JPG, WebP) để hiển thị trên Pro Shop &amp; POS.</small>
-                </div>
-                <div class="col-sm-6 text-sm-right mt-2 mt-sm-0">
-                    <a asp-action="Index" class="btn btn-outline btn-sm">
-                        <iconify-icon icon="lucide:arrow-left" width="15"></iconify-icon>
-                        <span>Quay lại danh sách</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </section>
+@await Html.PartialAsync("~/Areas/Admin/Views/Shared/_AdminPageHeader.cshtml")
 
-    <section class="content">
-        <div class="container-fluid">
             <form asp-action="Create" method="post" enctype="multipart/form-data" id="adminProductForm" novalidate>
                 <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
 
@@ -136,9 +121,9 @@
                                     </button>
                                 </div>
                             </div>
-                            <div class="card-footer bg-white d-flex justify-content-end" style="gap: 8px;">
-                                <a asp-action="Index" class="btn btn-outline">Hủy</a>
-                                <button type="submit" class="btn btn-primary font-weight-bold" data-testid="admin-product-submit">
+                            <div class="card-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border-default);background:var(--surface);">
+                                <a asp-action="Index" class="btn btn-secondary">Hủy</a>
+                                <button type="submit" class="btn btn-primary" data-testid="admin-product-submit">
                                     <iconify-icon icon="lucide:save" width="15"></iconify-icon>
                                     <span>Lưu sản phẩm</span>
                                 </button>
@@ -147,9 +132,6 @@
                     </div>
                 </div>
             </form>
-        </div>
-    </section>
-</div>
 
 @section Scripts {
     <script>

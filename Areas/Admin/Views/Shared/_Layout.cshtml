@@ -29,8 +29,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="@csrfTokens.RequestToken">
-    <title>@pageTitle — Spike Pickleball Admin</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23D8F826'/%3E%3C/svg%3E">
+    <title>@pageTitle — Spike Pickleball Workspace</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23FFFFFF'/%3E%3C/svg%3E">
     <script>
         (function () {
             try {
@@ -42,7 +42,7 @@
             } catch (_) {}
         })();
     </script>
-    <link rel="stylesheet" href="~/css/styles.css" asp-append-version="true">
+    @await Html.PartialAsync("~/Views/Shared/_DesignSystemCss.cshtml")
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 </head>
 <body class="sh-admin-body">
@@ -59,26 +59,23 @@
             })();
         </script>
 
-        <!-- Mobile Drawer Backdrop -->
         <div class="sh-sidebar-backdrop" id="shSidebarBackdrop" onclick="closeMobileAdminSidebar()" aria-hidden="true"></div>
 
-        <!-- SHADCN-ADMIN SIDEBAR -->
         <aside class="sh-sidebar" id="shAdminSidebar" aria-label="Điều hướng Quản trị CLB">
             <div class="sh-sidebar-header">
-                <a href="/Admin" class="sh-team-switcher" title="Spike Pickleball Admin Console">
+                <a href="/Admin" class="sh-team-switcher" title="Spike Pickleball Workspace">
                     <div class="sh-team-logo">
-                        <iconify-icon icon="mdi:racquetball" width="20"></iconify-icon>
+                        <iconify-icon icon="mdi:racquetball" width="18"></iconify-icon>
                     </div>
                     <div class="sh-team-meta">
                         <span class="sh-team-name">Spike Pickleball</span>
-                        <span class="sh-team-plan">@(isAdminOnly ? "Admin Console · V7" : "Staff Dispatch · V7")</span>
+                        <span class="sh-team-plan">@(isAdminOnly ? "Không gian Quản trị" : "Bàn điều phối Sân")</span>
                     </div>
                     <iconify-icon icon="lucide:chevrons-up-down" width="14" class="sh-team-caret"></iconify-icon>
                 </a>
             </div>
 
             <div class="sh-sidebar-content">
-                <!-- Nhóm 1: Vận hành & Điều phối (Admin + Staff) -->
                 <div class="sh-nav-group">
                     <div class="sh-nav-group-label">Vận hành &amp; Điều phối</div>
                     <nav class="sh-nav-menu" aria-label="Vận hành và Điều phối">
@@ -86,35 +83,35 @@
                            class="sh-nav-item @(IsRouteActive("/admin") ? "active" : "")"
                            data-nav-title="Tổng quan Dashboard"
                            title="Tổng quan Quản trị">
-                            <iconify-icon icon="lucide:layout-dashboard" width="18" class="sh-nav-icon"></iconify-icon>
+                            <iconify-icon icon="lucide:layout-dashboard" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Tổng quan</span>
                         </a>
                         <a href="/Management"
                            class="sh-nav-item @(IsRouteActive("/management", "/admin/home/management") ? "active" : "")"
-                           data-nav-title="Điều phối Sân & POS"
-                           title="Điều phối Sân, POS & Sổ thu">
-                            <iconify-icon icon="lucide:sliders-horizontal" width="18" class="sh-nav-icon"></iconify-icon>
+                           data-nav-title="Điều phối Sân &amp; POS"
+                           title="Điều phối Sân &amp; POS">
+                            <iconify-icon icon="lucide:calendar-range" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Điều phối &amp; POS</span>
                         </a>
                         <a href="/Admin/Bookings"
                            class="sh-nav-item @(IsRouteActive("/admin/bookings") ? "active" : "")"
-                           data-nav-title="Quản lý Đơn đặt sân"
+                           data-nav-title="Đơn đặt sân"
                            title="Danh sách Đơn đặt sân">
-                            <iconify-icon icon="lucide:calendar-check-2" width="18" class="sh-nav-icon"></iconify-icon>
+                            <iconify-icon icon="lucide:calendar-check-2" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Đơn đặt sân</span>
                         </a>
                         <a href="/Checkin"
                            class="sh-nav-item @(IsRouteActive("/checkin", "/admin/home/checkin") ? "active" : "")"
-                           data-nav-title="Trạm Soát vé Check-in QR"
-                           title="Trạm Soát vé Check-in QR">
-                            <iconify-icon icon="lucide:qr-code" width="18" class="sh-nav-icon"></iconify-icon>
+                           data-nav-title="Soát vé QR"
+                           title="Trạm Soát vé QR">
+                            <iconify-icon icon="lucide:qr-code" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Soát vé QR</span>
                         </a>
                         <a href="/Reports"
                            class="sh-nav-item @(IsRouteActive("/reports", "/admin/home/reports") ? "active" : "")"
-                           data-nav-title="Sổ cái Doanh thu & Báo cáo"
-                           title="Báo cáo Sổ cái Doanh thu & Công nợ">
-                            <iconify-icon icon="lucide:bar-chart-3" width="18" class="sh-nav-icon"></iconify-icon>
+                           data-nav-title="Sổ quỹ &amp; Báo cáo"
+                           title="Báo cáo Doanh thu &amp; Sổ cái">
+                            <iconify-icon icon="lucide:bar-chart-3" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Sổ quỹ &amp; Báo cáo</span>
                         </a>
                     </nav>
@@ -122,67 +119,60 @@
 
                 @if (isAdminOnly)
                 {
-                    <!-- Nhóm 2: Quản trị Danh mục & Hệ thống (Chỉ Admin) -->
                     <div class="sh-nav-group" data-testid="sh-nav-group-admin-only">
                         <div class="sh-nav-group-label">Quản trị Hệ thống</div>
                         <nav class="sh-nav-menu" aria-label="Quản trị Hệ thống">
                             <a href="/Admin/Courts"
                                class="sh-nav-item @(IsRouteActive("/admin/courts") ? "active" : "")"
-                               data-nav-title="Quản lý Cụm sân thi đấu"
-                               title="Quản lý Cụm sân thi đấu">
-                                <iconify-icon icon="lucide:map-pin" width="18" class="sh-nav-icon"></iconify-icon>
+                               title="Quản lý Cụm sân">
+                                <iconify-icon icon="lucide:map-pin" width="17" class="sh-nav-icon"></iconify-icon>
                                 <span class="sh-nav-text">Quản lý sân</span>
                             </a>
                             <a href="/Admin/Products"
                                class="sh-nav-item @(IsRouteActive("/admin/products") ? "active" : "")"
-                               data-nav-title="Sản phẩm Pro Shop & POS"
-                               title="Quản lý Sản phẩm Pro Shop & Upload ảnh">
-                                <iconify-icon icon="lucide:shopping-bag" width="18" class="sh-nav-icon"></iconify-icon>
+                               title="Sản phẩm Pro Shop &amp; POS">
+                                <iconify-icon icon="lucide:shopping-bag" width="17" class="sh-nav-icon"></iconify-icon>
                                 <span class="sh-nav-text">Sản phẩm POS</span>
                             </a>
                             <a href="/Admin/Accounts"
                                class="sh-nav-item @(IsRouteActive("/admin/accounts") ? "active" : "")"
-                               data-nav-title="Hội viên & Phân quyền RBAC"
-                               title="Quản lý Hội viên & Nhân sự">
-                                <iconify-icon icon="lucide:users" width="18" class="sh-nav-icon"></iconify-icon>
+                               title="Hội viên &amp; Phân quyền">
+                                <iconify-icon icon="lucide:users" width="17" class="sh-nav-icon"></iconify-icon>
                                 <span class="sh-nav-text">Hội viên CLB</span>
                             </a>
                             <a href="/Admin/Menus"
                                class="sh-nav-item @(IsRouteActive("/admin/menus") ? "active" : "")"
-                               data-nav-title="Quản lý Thanh Menu"
-                               title="Quản lý Menu điều hướng">
-                                <iconify-icon icon="lucide:list-tree" width="18" class="sh-nav-icon"></iconify-icon>
+                               title="Thanh Menu điều hướng">
+                                <iconify-icon icon="lucide:list-tree" width="17" class="sh-nav-icon"></iconify-icon>
                                 <span class="sh-nav-text">Thanh Menu</span>
                             </a>
                             <a href="/Cms"
                                class="sh-nav-item @(IsRouteActive("/cms", "/admin/home/cms") ? "active" : "")"
-                               data-nav-title="Cấu hình Website & Bảng giá CMS"
-                               title="Cấu hình Bảng giá & Giờ mở cửa (CMS)">
-                                <iconify-icon icon="lucide:settings-2" width="18" class="sh-nav-icon"></iconify-icon>
+                               title="Cấu hình Website &amp; Bảng giá">
+                                <iconify-icon icon="lucide:settings-2" width="17" class="sh-nav-icon"></iconify-icon>
                                 <span class="sh-nav-text">Cấu hình Website</span>
                             </a>
                         </nav>
                     </div>
                 }
 
-                <!-- Nhóm 3: Lối tắt Cổng Khách hàng -->
                 <div class="sh-nav-group">
                     <div class="sh-nav-group-label">Cổng Khách hàng</div>
                     <nav class="sh-nav-menu" aria-label="Cổng Khách hàng">
                         <a href="/" class="sh-nav-item" title="Mở Trang chủ CLB">
-                            <iconify-icon icon="lucide:globe" width="18" class="sh-nav-icon"></iconify-icon>
+                            <iconify-icon icon="lucide:globe" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Trang chủ CLB</span>
                         </a>
-                        <a href="/Booking" class="sh-nav-item" title="Mở Trang Đặt sân trực tuyến">
-                            <iconify-icon icon="lucide:calendar-plus" width="18" class="sh-nav-icon"></iconify-icon>
+                        <a href="/Booking" class="sh-nav-item" title="Đặt sân trực tuyến">
+                            <iconify-icon icon="lucide:calendar-plus" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Đặt sân trực tuyến</span>
                         </a>
-                        <a href="/Product" class="sh-nav-item" title="Mở Cửa hàng Pro Shop">
-                            <iconify-icon icon="lucide:store" width="18" class="sh-nav-icon"></iconify-icon>
+                        <a href="/Product" class="sh-nav-item" title="Cửa hàng Pro Shop">
+                            <iconify-icon icon="lucide:store" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Cửa hàng Pro Shop</span>
                         </a>
-                        <a href="/Lookup" class="sh-nav-item" title="Mở Trang Tra cứu vé QR">
-                            <iconify-icon icon="lucide:ticket" width="18" class="sh-nav-icon"></iconify-icon>
+                        <a href="/Lookup" class="sh-nav-item" title="Tra cứu vé QR">
+                            <iconify-icon icon="lucide:ticket" width="17" class="sh-nav-icon"></iconify-icon>
                             <span class="sh-nav-text">Tra cứu vé QR</span>
                         </a>
                     </nav>
@@ -193,21 +183,20 @@
                 <div class="sh-nav-user">
                     <a href="/Account/Profile" class="sh-nav-user-info" title="Hồ sơ cá nhân">
                         <div class="sh-nav-user-avatar">
-                            <iconify-icon icon="lucide:shield-check" width="17"></iconify-icon>
+                            <iconify-icon icon="lucide:shield-check" width="15"></iconify-icon>
                         </div>
                         <div class="sh-nav-user-text">
                             <span class="sh-nav-user-name">@(string.IsNullOrEmpty(Function._FullName) ? "Điều hành CLB" : Function._FullName)</span>
                             <span class="sh-nav-user-role">@(isAdminOnly ? "Administrator" : "Staff Operator")</span>
                         </div>
                     </a>
-                    <a href="/Admin/Home/Logout" class="sh-nav-user-logout" title="Đăng xuất khỏi hệ thống" aria-label="Đăng xuất">
-                        <iconify-icon icon="lucide:log-out" width="16"></iconify-icon>
+                    <a href="/Admin/Home/Logout" class="sh-nav-user-logout" title="Đăng xuất" aria-label="Đăng xuất">
+                        <iconify-icon icon="lucide:log-out" width="15"></iconify-icon>
                     </a>
                 </div>
             </div>
         </aside>
 
-        <!-- SHADCN-ADMIN SIDEBAR INSET (STICKY HEADER + MAIN CONTENT + FOOTER) -->
         <div class="sh-sidebar-inset" id="shSidebarInset">
             <header class="sh-topbar" id="shAdminTopbar">
                 <div class="sh-topbar-left">
@@ -215,13 +204,14 @@
                             class="sh-sidebar-trigger"
                             id="shSidebarToggleBtn"
                             onclick="toggleAdminSidebar()"
-                            aria-label="Đóng hoặc mở thanh điều hướng"
-                            title="Thu gọn / Mở rộng Sidebar (Ctrl+B)">
-                        <iconify-icon icon="lucide:panel-left" width="18"></iconify-icon>
+                            aria-label="Thu gọn hoặc mở rộng thanh điều hướng"
+                            aria-controls="shAdminSidebar"
+                            aria-expanded="true">
+                        <iconify-icon icon="lucide:panel-left" width="17"></iconify-icon>
                     </button>
                     <span class="sh-topbar-divider" aria-hidden="true"></span>
                     <nav class="sh-topbar-breadcrumb" aria-label="Breadcrumb">
-                        <a href="/Admin" class="sh-topbar-bc-root">@(isAdminOnly ? "Quản trị CLB" : "Bàn điều phối")</a>
+                        <a href="/Admin" class="sh-topbar-bc-root">@(isAdminOnly ? "Quản trị" : "Điều phối")</a>
                         <iconify-icon icon="lucide:chevron-right" width="14" class="sh-topbar-bc-sep"></iconify-icon>
                         <span class="sh-topbar-bc-page">@pageTitle</span>
                     </nav>
@@ -232,61 +222,57 @@
                             class="sh-search-trigger"
                             id="shCmdTriggerBtn"
                             onclick="openCommandPalette()"
-                            aria-label="Tìm kiếm nhanh phân hệ (Ctrl+K)">
-                        <iconify-icon icon="lucide:search" width="15"></iconify-icon>
+                            aria-label="Tìm nhanh phân hệ (Ctrl+K)">
+                        <iconify-icon icon="lucide:search" width="14"></iconify-icon>
                         <span class="sh-search-trigger-text">Tìm nhanh phân hệ...</span>
                         <kbd class="sh-kbd">Ctrl K</kbd>
                     </button>
-
                     <button type="button"
                             class="sh-icon-action-btn"
                             id="shThemeToggleBtn"
                             onclick="toggleSpikeTheme()"
                             aria-label="Chuyển đổi giao diện Sáng / Tối"
-                            title="Chuyển đổi chế độ Sáng / Tối">
-                        <iconify-icon icon="lucide:sun" width="17" class="sh-theme-icon-sun"></iconify-icon>
-                        <iconify-icon icon="lucide:moon" width="17" class="sh-theme-icon-moon"></iconify-icon>
+                            title="Chuyển đổi giao diện Sáng / Tối">
+                        <iconify-icon icon="lucide:sun" width="16" class="sh-theme-icon-sun"></iconify-icon>
+                        <iconify-icon icon="lucide:moon" width="16" class="sh-theme-icon-moon"></iconify-icon>
                     </button>
-
-                    <a href="/Checkin" class="btn btn-outline btn-xs sh-topbar-quick-link" title="Trạm soát vé QR">
+                    <a href="/Checkin" class="btn btn-outline btn-xs sh-topbar-quick-link" title="Soát vé QR">
                         <iconify-icon icon="lucide:qr-code" width="14"></iconify-icon>
                         <span>Soát vé QR</span>
                     </a>
-
-                    <div class="user-pill sh-topbar-user-pill">
-                        <a href="/Account/Profile" style="display:inline-flex;align-items:center;gap:0.4rem;color:inherit;text-decoration:none;" title="Hồ sơ cá nhân">
-                            <iconify-icon icon="lucide:shield-check" width="15" style="color:var(--color-primary);"></iconify-icon>
-                            <span>@(string.IsNullOrEmpty(Function._FullName) ? "Điều hành CLB" : Function._FullName)</span>
+                    <div class="sh-topbar-user-pill">
+                        <a href="/Account/Profile" style="display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;" title="Hồ sơ cá nhân">
+                            <iconify-icon icon="lucide:user-check" width="14" style="color:var(--brand-primary);"></iconify-icon>
+                            <span class="sh-topbar-user-name">@(string.IsNullOrEmpty(Function._FullName) ? "Ban Quản Trị" : Function._FullName)</span>
                         </a>
-                        <a href="/Admin/Home/Logout" class="btn btn-xs btn-ghost" style="color:#EF4444;">Thoát</a>
+                        <a href="/Admin/Home/Logout" class="btn btn-xs btn-ghost" style="color:var(--status-danger-text);">Thoát</a>
                     </div>
                 </div>
             </header>
 
-            <div class="admin-page-shell" id="shAdminMainContent">
+            <main class="sh-admin-main admin-page-shell" id="shAdminMainContent">
                 @RenderBody()
-            </div>
+            </main>
 
             <footer class="sh-admin-footer">
                 <div class="sh-admin-footer-inner">
-                    <span>© 2026 Spike Pickleball Club — Shadcn-Admin Operations Shell V7</span>
-                    <span>Sổ cái đối soát thời gian thực · Bảo mật xác thực phân quyền RBAC</span>
+                    <span>© 2026 Spike Pickleball Club — Hệ thống Quản trị &amp; Điều phối</span>
+                    <span>Sổ cái thời gian thực &amp; Kiểm soát phân quyền RBAC</span>
                 </div>
             </footer>
         </div>
     </div>
 
-    <!-- COMMAND PALETTE DIALOG (CTRL+K / SHADCN-ADMIN COMMAND MENU) -->
     <div class="modal-overlay" id="shCommandModal" role="dialog" aria-modal="true" aria-labelledby="shCommandModalTitle">
         <div class="modal sh-cmd-dialog">
             <div class="sh-cmd-search-bar">
-                <iconify-icon icon="lucide:search" width="18" class="sh-cmd-search-icon"></iconify-icon>
+                <iconify-icon icon="lucide:search" width="17" class="sh-cmd-search-icon"></iconify-icon>
                 <input type="text"
                        id="shCommandSearchInput"
                        class="sh-cmd-input"
-                       placeholder="Nhập tên trang hoặc chức năng cần mở (VD: POS, QR, Sản phẩm, Sổ cái...)"
-                       aria-labelledby="shCommandModalTitle"
-                       oninput="filterCommandPalette(this.value)" />
+                       placeholder="Gõ tên phân hệ, chức năng (VD: sân, POS, báo cáo, QR)..."
+                       oninput="filterCommandPalette(this.value)"
+                       autocomplete="off" />
                 <span id="shCommandModalTitle" class="sr-only">Tìm kiếm nhanh điều hướng hệ thống</span>
                 <button type="button" class="sh-cmd-esc-btn" onclick="closeModal('shCommandModal')">ESC</button>
             </div>
@@ -294,12 +280,12 @@
                 <div class="sh-cmd-group-title">Vận hành &amp; Điều phối</div>
                 <a href="/Admin" class="sh-cmd-item" data-cmd-keywords="tong quan dashboard admin">
                     <iconify-icon icon="lucide:layout-dashboard" width="16"></iconify-icon>
-                    <span>Tổng quan Quản trị (Dashboard)</span>
+                    <span>Tổng quan Điều hành CLB</span>
                     <span class="sh-cmd-shortcut">/Admin</span>
                 </a>
-                <a href="/Management" class="sh-cmd-item" data-cmd-keywords="dieu phoi san pos thu ngan khoa san">
-                    <iconify-icon icon="lucide:sliders-horizontal" width="16"></iconify-icon>
-                    <span>Trung tâm Điều phối Sân, POS &amp; Sổ thu</span>
+                <a href="/Management" class="sh-cmd-item" data-cmd-keywords="dieu phoi san pos thu ngan khoa san timeline">
+                    <iconify-icon icon="lucide:calendar-range" width="16"></iconify-icon>
+                    <span>Điều phối Sân, Timeline &amp; Sổ cái POS</span>
                     <span class="sh-cmd-shortcut">/Management</span>
                 </a>
                 <a href="/Admin/Bookings" class="sh-cmd-item" data-cmd-keywords="don dat san walkin duyet ve">
@@ -314,13 +300,13 @@
                 </a>
                 <a href="/Reports" class="sh-cmd-item" data-cmd-keywords="bao cao doanh thu so cai cong no ledger">
                     <iconify-icon icon="lucide:bar-chart-3" width="16"></iconify-icon>
-                    <span>Báo cáo Doanh thu &amp; Sổ cái Công nợ</span>
+                    <span>Báo cáo Doanh thu &amp; Sổ cái</span>
                     <span class="sh-cmd-shortcut">/Reports</span>
                 </a>
 
                 @if (isAdminOnly)
                 {
-                    <div class="sh-cmd-group-title">Quản trị Hệ thống (Admin)</div>
+                    <div class="sh-cmd-group-title">Quản trị Hệ thống</div>
                     <a href="/Admin/Courts" class="sh-cmd-item" data-cmd-keywords="quan ly san gia san vip indoor outdoor">
                         <iconify-icon icon="lucide:map-pin" width="16"></iconify-icon>
                         <span>Quản lý Cụm sân thi đấu</span>
@@ -328,12 +314,12 @@
                     </a>
                     <a href="/Admin/Products" class="sh-cmd-item" data-cmd-keywords="san pham pro shop pos ton kho upload anh">
                         <iconify-icon icon="lucide:shopping-bag" width="16"></iconify-icon>
-                        <span>Quản lý Sản phẩm Pro Shop &amp; Upload ảnh</span>
+                        <span>Quản lý Sản phẩm Pro Shop</span>
                         <span class="sh-cmd-shortcut">/Admin/Products</span>
                     </a>
                     <a href="/Admin/Accounts" class="sh-cmd-item" data-cmd-keywords="hoi vien tai khoan nhan su rbac phan quyen">
                         <iconify-icon icon="lucide:users" width="16"></iconify-icon>
-                        <span>Quản lý Hội viên &amp; Phân quyền RBAC</span>
+                        <span>Quản lý Hội viên &amp; Phân quyền</span>
                         <span class="sh-cmd-shortcut">/Admin/Accounts</span>
                     </a>
                     <a href="/Admin/Menus" class="sh-cmd-item" data-cmd-keywords="menu dieu huong">
@@ -361,7 +347,7 @@
                 </a>
                 <a href="/Product" class="sh-cmd-item" data-cmd-keywords="cua hang pro shop nuoc uong thue vot">
                     <iconify-icon icon="lucide:store" width="16"></iconify-icon>
-                    <span>Cửa hàng Pro Shop &amp; Dịch vụ tại sân</span>
+                    <span>Cửa hàng Pro Shop</span>
                     <span class="sh-cmd-shortcut">/Product</span>
                 </a>
                 <a href="/Lookup" class="sh-cmd-item" data-cmd-keywords="tra cuu ve qr ma dat san">

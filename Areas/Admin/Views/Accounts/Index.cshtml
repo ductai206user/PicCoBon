@@ -13,23 +13,18 @@
     int adminCount = list.Count(a => a.RoleId == 1);
 }
 
-<section class="content-header">
-    <div class="container-fluid">
-        <div class="row">
-            <div>
-                <span class="section-kicker" style="color:var(--color-volt);">Quản trị CLB &amp; Phân quyền RBAC</span>
-                <h1>Quản Lý Hội Viên, Nhân Sự &amp; Hồ Sơ VĐV</h1>
-            </div>
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="/Admin">Trang chủ Admin</a></li>
-                <li class="breadcrumb-item active">Hội viên &amp; Nhân sự</li>
-            </ol>
-        </div>
+<div class="sn-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border-default);">
+    <div>
+        <h1 class="sn-h1" style="margin:0;font-size:1.65rem;font-weight:700;">Quản lý Hội viên, Nhân sự &amp; Phân quyền</h1>
+        <p style="margin:5px 0 0;color:var(--text-secondary);font-size:0.9rem;">Theo dõi tổng chi tiêu xác thực, hạng thẻ hội viên và cấp quyền nhân sự CLB.</p>
     </div>
-</section>
+    <a href="/Admin/Register" class="btn btn-secondary btn-sm">
+        <iconify-icon icon="lucide:user-plus" width="15"></iconify-icon>
+        <span>Cấp tài khoản nhân sự</span>
+    </a>
+</div>
 
-<section class="content">
-    <div class="container-fluid">
+<div class="stack">
         @if (TempData["AdminAccountSuccess"] != null)
         {
             <div class="sh-alert-success">
@@ -237,5 +232,4 @@
                 </div>
             </div>
         </div>
-    </div>
-</section>
+</div>

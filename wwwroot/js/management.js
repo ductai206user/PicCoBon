@@ -350,6 +350,146 @@ function renderManagement() {
       }).join('');
     }
   }
+  renderManagementTimeline();
+}
+
+function renderManagementTimeline() {
+  const table = document.getElementById('mgmtTimelineGrid');
+  if (!table) return;
+
+  const dateInput = document.getElementById('mgmtTimelineDate');
+  const todayStr = getTodayStr();
+  if (dateInput && !dateInput.value) {
+    dateInput.value = todayStr;
+  }
+  const targetDate = (dateInput && dateInput.value) || todayStr;
+
+  if (!HAS_SERVER_STATE) {
+    table.innerHTML = `<tbody><tr><td style="padding:18px;">${renderUiStateBanner('loading', { compact: true })}</td></tr></tbody>`;
+    return;
+  }
+  if (COURTS.length === 0) {
+    table.innerHTML = `<tbody><tr><td style="padding:18px;">${renderUiStateBanner('empty', { compact: true, title: 'Chưa có sân đang hoạt động' })}</td></tr></tbody>`;
+    return;
+  }
+
+  const { openMins, closeMins } = getClubOperatingWindowMinutes();
+  const openHour = Math.max(5, Math.floor(openMins / 60));
+  const closeHour = Math.min(23, Math.ceil(closeMins / 60));
+  const dayBookings = BOOKINGS.filter(b =>
+    (b.date || todayStr) === targetDate &&
+    !['rejected', 'cancelled', 'expired', 'no_show'].includes(b.status) &&
+    (b.status !== 'pending' || isPendingBookingHoldActive(b))
+  );
+
+  let html = '<thead><tr><th style="width:70px;text-align:center;">Giờ</th>';
+  COURTS.forEach(c => {
+    const shortName = escapeHtml(String(c.name || '').replace(' (Arena A)', '').replace(' (Arena B)', ''));
+    html += `<th>${shortName}<div style="font-size:0.7rem;font-weight:500;color:var(--text-muted);">${c.type === 'Indoor' ? 'Trong nhà VIP' : 'Ngoài trời'}</div></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  for (let h = openHour; h < closeHour; h++) {
+    const hourStr = `${String(h).padStart(2, '0')}:00`;
+    const slotStart = h * 60;
+    const slotEnd = (h + 1) * 60;
+    html += `<tr><td class="sn-ops-timeline-hour">${hourStr}</td>`;
+
+    COURTS.forEach(c => {
+      const lockHit = COURT_LOCKS.find(l => {
+        if (Number(l.courtId) !== Number(c.id) || l.date !== targetDate) return false;
+        const ls = timeToMinutes(l.startTime);
+        const le = ls + (Number(l.duration) || 60);
+        return slotStart < le && slotEnd > ls;
+      });
+      if (lockHit) {
+        html += `<td><div class="sn-ops-slot-pill state-locked" title="${escapeAttr(lockHit.reason || 'Khóa sân')}"><span>✕ ${escapeHtml(lockHit.reason || 'Khóa sân')}</span></div></td>`;
+        return;
+      }
+
+      const b = dayBookings.find(item => {
+        if (Number(item.courtId) !== Number(c.id)) return false;
+        const bs = timeToMinutes(item.time);
+        const be = bs + (Number(item.duration) || 60);
+        return slotStart < be && slotEnd > bs;
+      });
+
+      if (!b) {
+        html += `<td><div class="sn-ops-slot-empty">— Trống</div></td>`;
+      } else {
+        const stateCls = b.status === 'playing' ? 'state-playing' : (b.status === 'pending' ? 'state-pending' : 'state-approved');
+        const stateIcon = b.status === 'playing' ? '■' : (b.status === 'pending' ? '◷' : '●');
+        html += `<td>
+          <button type="button"
+                  class="sn-ops-slot-pill ${stateCls}"
+                  onclick="openManagementDetailDrawer('${escapeAttr(b.id)}', this)">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${stateIcon} ${escapeHtml(b.name || b.id)}</span>
+            <span class="font-mono" style="font-size:0.7rem;flex-shrink:0;">${escapeHtml(b.time)}</span>
+          </button>
+        </td>`;
+      }
+    });
+
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function openManagementDetailDrawer(bookingCode, triggerEl = null) {
+  const b = BOOKINGS.find(item => item.id === bookingCode);
+  if (!b) return;
+  const titleEl = document.getElementById('mgmtDrawerTitle');
+  const subEl = document.getElementById('mgmtDrawerSubtitle');
+  const bodyEl = document.getElementById('mgmtDrawerBody');
+  const footEl = document.getElementById('mgmtDrawerFooter');
+
+  const courtName = getCourtDisplayName(b.courtId, b.courtName);
+  const grandTotal = getBookingGrandTotal(b);
+  const paidAmount = Number(b.paidAmount || 0);
+  const unpaid = Math.max(0, grandTotal - paidAmount);
+  const endTime = getEndTime(b.time, b.duration);
+
+  if (subEl) subEl.textContent = `${b.id} · ${formatDateVN(b.date)}`;
+  if (titleEl) titleEl.textContent = `${b.name || 'Khách hàng'} — ${courtName}`;
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span class="badge ${statusBadgeClass(b.status, b)}">${escapeHtml(statusLabel(b.status, b))}</span>
+        ${paymentBadgeHtml(paidAmount, grandTotal, b.paymentStatus)}
+      </div>
+      <div class="payment-summary" style="border-radius:var(--radius-md);">
+        <div class="payment-line"><span class="text-muted">Sân thi đấu</span><strong>${escapeHtml(courtName)}</strong></div>
+        <div class="payment-line"><span class="text-muted">Khung giờ</span><strong class="text-mono">${escapeHtml(b.time)} → ${escapeHtml(endTime)} (${b.duration}p)</strong></div>
+        <div class="payment-line"><span class="text-muted">Số điện thoại</span><strong class="text-mono">${escapeHtml(b.phone || '---')}</strong></div>
+        <div class="payment-line"><span class="text-muted">Dịch vụ POS thêm</span><strong class="text-mono">${formatMoney(getBookingPosTotal(b))}</strong></div>
+        <div class="payment-line"><span class="text-muted">Đã thu thực tế</span><strong class="text-mono" style="color:var(--status-success-text)">${formatMoney(paidAmount)}</strong></div>
+        <div class="payment-line total"><span>Còn phải thu</span><span class="text-mono" style="color:var(--brand-primary)">${formatMoney(unpaid)}</span></div>
+      </div>
+    `;
+  }
+  if (footEl) {
+    const actions = [];
+    if (b.status === 'pending') {
+      actions.push(`<button type="button" class="btn btn-primary btn-sm" onclick="SpikeUI.closeDrawer('mgmtDetailDrawer');approveBooking('${escapeAttr(b.id)}')">Duyệt vé</button>`);
+      actions.push(`<button type="button" class="btn btn-danger btn-sm" onclick="SpikeUI.closeDrawer('mgmtDetailDrawer');rejectBooking('${escapeAttr(b.id)}')">Từ chối</button>`);
+    } else {
+      if (b.status === 'approved') {
+        actions.push(`<button type="button" class="btn btn-secondary btn-sm" onclick="SpikeUI.closeDrawer('mgmtDetailDrawer');startMatchNow('${escapeAttr(b.id)}')">Nhận sân vào chơi</button>`);
+      }
+      if (b.status === 'playing' || b.status === 'approved') {
+        actions.push(`<button type="button" class="btn btn-secondary btn-sm" onclick="SpikeUI.closeDrawer('mgmtDetailDrawer');openPos('${escapeAttr(b.id)}')">Mở POS / Đổi sân</button>`);
+      }
+      actions.push(`<button type="button" class="btn btn-primary btn-sm" onclick="SpikeUI.closeDrawer('mgmtDetailDrawer');openLedgerModal('booking','${escapeAttr(b.id)}')">Sổ cái / Thu tiền</button>`);
+      if (b.status === 'playing') {
+        actions.push(`<button type="button" class="btn btn-outline btn-sm" onclick="SpikeUI.closeDrawer('mgmtDetailDrawer');finishSessionOnly('${escapeAttr(b.id)}')">Đóng ca</button>`);
+      }
+    }
+    actions.push(`<button type="button" class="btn btn-ghost btn-sm" onclick="SpikeUI.closeDrawer('mgmtDetailDrawer')">Đóng</button>`);
+    footEl.innerHTML = actions.join('');
+  }
+
+  SpikeUI.openDrawer('mgmtDetailDrawer', triggerEl);
 }
 
 function handleShopOrderFilterChange() {

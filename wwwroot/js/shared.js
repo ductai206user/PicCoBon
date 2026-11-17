@@ -1939,4 +1939,111 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  const publicNav = document.getElementById('siteMainNav');
+  if (publicNav) {
+    publicNav.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        publicNav.classList.remove('is-open');
+        const btn = document.getElementById('siteMobileNavBtn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      });
+    });
+  }
 });
+
+// ================================================================
+// SPIKE x NOTION SHARED INTERACTION PRIMITIVES (Nav Drawer & Confirm)
+// ================================================================
+function toggleMobileNav() {
+  const nav = document.getElementById('siteMainNav');
+  const btn = document.getElementById('siteMobileNavBtn');
+  if (!nav) return;
+  const nextOpen = !nav.classList.contains('is-open');
+  nav.classList.toggle('is-open', nextOpen);
+  if (btn) btn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+}
+
+window.SpikeUI = (() => {
+  let activeDrawerId = null;
+  let lastTriggerEl = null;
+
+  function openDrawer(drawerId, triggerEl = null) {
+    const el = document.getElementById(drawerId);
+    if (!el) return;
+    lastTriggerEl = triggerEl || document.activeElement;
+    activeDrawerId = drawerId;
+    el.classList.add('open');
+    el.setAttribute('aria-hidden', 'false');
+    const closeBtn = el.querySelector('[data-drawer-close], button, a, input');
+    if (closeBtn) setTimeout(() => closeBtn.focus(), 40);
+  }
+
+  function closeDrawer(drawerId = activeDrawerId) {
+    if (!drawerId) return;
+    const el = document.getElementById(drawerId);
+    if (el) {
+      el.classList.remove('open');
+      el.setAttribute('aria-hidden', 'true');
+    }
+    if (drawerId === activeDrawerId) {
+      activeDrawerId = null;
+      if (lastTriggerEl && typeof lastTriggerEl.focus === 'function') {
+        try { lastTriggerEl.focus(); } catch (_) {}
+      }
+      lastTriggerEl = null;
+    }
+  }
+
+  function confirmAction({ title = 'Xác nhận thao tác', message = 'Bạn có chắc muốn tiếp tục?', confirmLabel = 'Xác nhận', danger = false } = {}) {
+    return new Promise(resolve => {
+      let modal = document.getElementById('spkGlobalConfirmModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'spkGlobalConfirmModal';
+        modal.className = 'modal-overlay';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.innerHTML = `
+          <div class="modal" style="max-width:420px;width:92vw;">
+            <div class="modal-header">
+              <h3 class="modal-title" id="spkConfirmTitle"></h3>
+              <button type="button" class="modal-close" id="spkConfirmCloseX" aria-label="Đóng">×</button>
+            </div>
+            <div class="modal-body" style="padding:18px 20px;">
+              <p id="spkConfirmMessage" style="margin:0;color:var(--text-secondary);font-size:0.92rem;line-height:1.55;"></p>
+            </div>
+            <div class="modal-footer" style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;">
+              <button type="button" class="btn btn-secondary btn-sm" id="spkConfirmCancel">Hủy</button>
+              <button type="button" class="btn btn-sm" id="spkConfirmOk"></button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+      }
+      document.getElementById('spkConfirmTitle').textContent = title;
+      document.getElementById('spkConfirmMessage').textContent = message;
+      const okBtn = document.getElementById('spkConfirmOk');
+      okBtn.textContent = confirmLabel;
+      okBtn.className = `btn btn-sm ${danger ? 'btn-danger' : 'btn-primary'}`;
+
+      const cleanup = (result) => {
+        closeModal('spkGlobalConfirmModal');
+        resolve(result);
+      };
+      document.getElementById('spkConfirmCancel').onclick = () => cleanup(false);
+      document.getElementById('spkConfirmCloseX').onclick = () => cleanup(false);
+      okBtn.onclick = () => cleanup(true);
+      openModal('spkGlobalConfirmModal');
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (activeDrawerId) closeDrawer(activeDrawerId);
+      const nav = document.getElementById('siteMainNav');
+      if (nav && nav.classList.contains('is-open')) toggleMobileNav();
+    }
+  });
+
+  return { openDrawer, closeDrawer, confirm: confirmAction };
+})();

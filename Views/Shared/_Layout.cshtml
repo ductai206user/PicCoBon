@@ -24,8 +24,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="@csrfTokens.RequestToken">
-    <title>@(ViewData["Title"] ?? "Spike Pickleball Club — Tổ Hợp Sân Pickleball Trong Nhà & Ngoài Trời")</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23D8F826'/%3E%3C/svg%3E">
+    <title>@(ViewData["Title"] ?? "Spike Pickleball Club — Hệ Thống Đặt Sân & Pro Shop")</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF5520'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23FFFFFF'/%3E%3C/svg%3E">
     <script>
         (function () {
             try {
@@ -37,16 +37,17 @@
             } catch (_) {}
         })();
     </script>
-    <link rel="stylesheet" href="~/css/styles.css" asp-append-version="true">
+    @await Html.PartialAsync("_DesignSystemCss")
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 </head>
 <body>
+    <a href="#mainContent" class="sr-only">Chuyển tới nội dung chính</a>
 
     <header class="site-header">
         <div class="site-header-inner">
             <a href="/" class="site-brand">
                 <div class="site-brand-mark">
-                    <iconify-icon icon="mdi:racquetball" width="24"></iconify-icon>
+                    <iconify-icon icon="mdi:racquetball" width="20"></iconify-icon>
                 </div>
                 <div class="site-brand-text">
                     <span class="site-brand-name">SPIKE<span>.</span></span>
@@ -54,7 +55,7 @@
                 </div>
             </a>
 
-            <nav class="site-nav" id="siteMainNav">
+            <nav class="site-nav" id="siteMainNav" aria-label="Điều hướng chính">
                 @await Component.InvokeAsync("MenuTop")
             </nav>
 
@@ -62,17 +63,18 @@
                 <div id="headerAuthActionsMount">
                     @if (Function.IsLogin())
                     {
-                        <div class="user-pill">
-                            <a href="/Account/Profile" style="display:inline-flex;align-items:center;gap:0.45rem;color:#FFF;text-decoration:none;" title="Hồ sơ cá nhân">
-                                <iconify-icon icon="lucide:user-circle" width="18" style="color:var(--color-volt);"></iconify-icon>
-                                <span>@Function._FullName</span>
+                        var initials = string.IsNullOrWhiteSpace(Function._FullName) ? "U" : Function._FullName.Trim().Substring(0, 1).ToUpperInvariant();
+                        <div style="display:inline-flex;align-items:center;gap:6px;">
+                            <a href="/Account/Profile" class="sn-nav-user" title="Hồ sơ cá nhân">
+                                <span class="sn-nav-user-badge">@initials</span>
+                                <span class="sn-nav-user-text">@Function._FullName</span>
                             </a>
-                            <a href="/Account/Logout" class="btn btn-xs btn-ghost" style="color:#FCA5A5;">Thoát</a>
+                            <a href="/Account/Logout" class="btn btn-xs btn-ghost" title="Đăng xuất">Thoát</a>
                         </div>
                     }
                     else
                     {
-                        <a href="/Account/Login" class="btn btn-sm btn-secondary" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:#FFF;">Đăng nhập</a>
+                        <a href="/Account/Login" class="btn btn-sm btn-secondary">Đăng nhập</a>
                     }
                 </div>
                 <button type="button"
@@ -86,14 +88,20 @@
                 </button>
                 @if (Function.IsLogin() && (Function._RoleId == 1 || Function._RoleId == 3))
                 {
-                    <a href="/Admin" class="btn btn-outline btn-sm btn-pill sh-public-admin-link" style="border-color:rgba(216,248,38,0.45);color:var(--color-volt);background:rgba(216,248,38,0.08);" title="Mở Trung tâm Quản trị">
+                    <a href="/Admin" class="sn-nav-admin-link sh-public-admin-link" title="Mở Trung tâm Quản trị">
                         <iconify-icon icon="lucide:layout-dashboard" width="14"></iconify-icon>
                         <span>Quản trị</span>
                     </a>
                 }
-                <a href="/Booking" class="btn btn-primary btn-sm btn-pill header-cta-book">Đặt sân ngay</a>
-                <button type="button" class="mobile-menu-btn" onclick="toggleMobileNav()" aria-label="Mở menu điều hướng">
-                    <iconify-icon icon="lucide:menu" width="20"></iconify-icon>
+                <a href="/Booking" class="btn btn-primary btn-sm header-cta-book">Đặt sân ngay</a>
+                <button type="button"
+                        id="siteMobileNavBtn"
+                        class="sn-mobile-menu-btn mobile-menu-btn"
+                        onclick="toggleMobileNav()"
+                        aria-expanded="false"
+                        aria-controls="siteMainNav"
+                        aria-label="Mở menu điều hướng">
+                    <iconify-icon icon="lucide:menu" width="19"></iconify-icon>
                 </button>
             </div>
         </div>
@@ -101,69 +109,69 @@
 
     <div id="adminSubbarMount"></div>
 
-    @RenderBody()
+    <div id="mainContent">
+        @RenderBody()
+    </div>
 
     <footer class="site-footer">
-        <div class="container">
-            <div class="site-footer-grid">
-                <div class="site-footer-col">
-                    <a href="/" class="site-brand" style="margin-bottom:1rem;">
-                        <div class="site-brand-mark">
-                            <iconify-icon icon="mdi:racquetball" width="22"></iconify-icon>
-                        </div>
-                        <div class="site-brand-text">
-                            <span class="site-brand-name">SPIKE<span>.</span></span>
-                            <span class="site-brand-tag">Pickleball Club</span>
-                        </div>
-                    </a>
-                    <p style="font-size:0.85rem;line-height:1.7;">
-                        Tổ hợp sân thi đấu Pickleball trong nhà &amp; ngoài trời với mặt sân Cushion 8 lớp giảm chấn, hệ thống chiếu sáng LED chống chói 1000 Lux và không gian Pro Shop chuyên nghiệp.
-                    </p>
-                </div>
-
-                <div class="site-footer-col">
-                    <h4>Khám phá CLB</h4>
-                    <div class="site-footer-links">
-                        <a href="/">Trang chủ &amp; Lịch sân trống</a>
-                        <a href="/Booking">Đặt sân trực tuyến</a>
-                        <a href="/Product">Cửa hàng Pro Shop &amp; Giải khát</a>
-                        <a href="/Lookup">Tra cứu mã vé điện tử QR</a>
+        <div class="site-footer-grid">
+            <div class="site-footer-col">
+                <a href="/" class="site-brand" style="margin-bottom:12px;">
+                    <div class="site-brand-mark">
+                        <iconify-icon icon="mdi:racquetball" width="18"></iconify-icon>
                     </div>
-                </div>
-
-                <div class="site-footer-col">
-                    <h4>Bảng giá niêm yết</h4>
-                    <div class="site-footer-links">
-                        <span>Giờ tiêu chuẩn (<span data-cms="openTime">@ssrSettings.OpenTime</span> – <span data-cms="peakStart">@ssrSettings.PeakStart</span>): <strong style="color:#FFF;" data-cms-price="courtPrice" data-cms="courtPriceFormatted">@ssrStdPriceNum đ/h</strong></span>
-                        <span>Khung giờ vàng (<span data-cms="peakStart">@ssrSettings.PeakStart</span> – <span data-cms="closeTime">@ssrSettings.CloseTime</span>): <strong style="color:var(--color-volt);" data-cms-peak-total="true">@ssrPeakTotalNum đ/h</strong></span>
-                        <span>Phụ thu sân Indoor VIP: <strong style="color:#FFF;" data-cms="vipSurchargeFormatted">@ssrVipNum đ/h</strong></span>
-                        <span>Giờ mở cửa: <strong style="color:#FFF;" data-cms="openHours">@ssrSettings.OpenTime – @ssrSettings.CloseTime</strong></span>
+                    <div class="site-brand-text">
+                        <span class="site-brand-name">SPIKE<span>.</span></span>
+                        <span class="site-brand-tag">Pickleball Club</span>
                     </div>
-                </div>
+                </a>
+                <p style="font-size:0.875rem;line-height:1.65;color:var(--text-secondary);margin:0;">
+                    Tổ hợp sân thi đấu Pickleball trong nhà và ngoài trời với mặt sân Cushion 8 lớp, hệ thống đèn chống chói và Pro Shop ngay tại sảnh.
+                </p>
+            </div>
 
-                <div class="site-footer-col">
-                    <h4>Liên hệ CLB</h4>
-                    <div class="site-footer-links">
-                        <span style="display:inline-flex;align-items:center;gap:0.45rem;">
-                            <iconify-icon icon="lucide:map-pin" width="15" style="color:var(--color-primary);flex-shrink:0;"></iconify-icon>
-                            <span data-cms="address">@ssrAddress</span>
-                        </span>
-                        <span style="display:inline-flex;align-items:center;gap:0.45rem;">
-                            <iconify-icon icon="lucide:phone" width="15" style="color:var(--color-primary);flex-shrink:0;"></iconify-icon>
-                            <span>Hotline: <strong style="color:var(--color-primary);" data-cms="hotline">@ssrSettings.Hotline</strong></span>
-                        </span>
-                        <span style="display:inline-flex;align-items:center;gap:0.45rem;">
-                            <iconify-icon icon="lucide:mail" width="15" style="color:var(--color-primary);flex-shrink:0;"></iconify-icon>
-                            <span>Email: <strong style="color:#E2E8F0;">contact@spikepickleball.vn</strong></span>
-                        </span>
-                    </div>
+            <div class="site-footer-col">
+                <h4>Khám phá CLB</h4>
+                <div class="site-footer-links">
+                    <a href="/">Trang chủ &amp; Lịch trống</a>
+                    <a href="/Booking">Đặt sân trực tuyến</a>
+                    <a href="/Product">Cửa hàng Pro Shop</a>
+                    <a href="/Lookup">Tra cứu mã vé QR</a>
                 </div>
             </div>
 
-            <div class="site-footer-bottom">
-                <span>© 2026 Spike Pickleball Club. Bảo lưu mọi quyền.</span>
-                <span>Tổ hợp sân Pickleball mặt Cushion 8 lớp &amp; Đèn LED 1000 Lux</span>
+            <div class="site-footer-col">
+                <h4>Bảng giá niêm yết</h4>
+                <div class="site-footer-links">
+                    <span>Tiêu chuẩn (<span data-cms="openTime">@ssrSettings.OpenTime</span> – <span data-cms="peakStart">@ssrSettings.PeakStart</span>): <strong style="color:var(--text-primary);" class="tabular-nums" data-cms-price="courtPrice" data-cms="courtPriceFormatted">@ssrStdPriceNum đ/h</strong></span>
+                    <span>Giờ vàng (<span data-cms="peakStart">@ssrSettings.PeakStart</span> – <span data-cms="closeTime">@ssrSettings.CloseTime</span>): <strong style="color:var(--brand-primary-ink);" class="tabular-nums" data-cms-peak-total="true">@ssrPeakTotalNum đ/h</strong></span>
+                    <span>Phụ thu sân VIP: <strong style="color:var(--text-primary);" class="tabular-nums" data-cms="vipSurchargeFormatted">@ssrVipNum đ/h</strong></span>
+                    <span>Giờ hoạt động: <strong style="color:var(--text-primary);" class="tabular-nums" data-cms="openHours">@ssrSettings.OpenTime – @ssrSettings.CloseTime</strong></span>
+                </div>
             </div>
+
+            <div class="site-footer-col">
+                <h4>Liên hệ CLB</h4>
+                <div class="site-footer-links">
+                    <span style="display:inline-flex;align-items:flex-start;gap:7px;">
+                        <iconify-icon icon="lucide:map-pin" width="15" style="color:var(--brand-primary);margin-top:3px;flex-shrink:0;"></iconify-icon>
+                        <span data-cms="address">@ssrAddress</span>
+                    </span>
+                    <span style="display:inline-flex;align-items:center;gap:7px;">
+                        <iconify-icon icon="lucide:phone" width="15" style="color:var(--brand-primary);flex-shrink:0;"></iconify-icon>
+                        <span>Hotline: <strong style="color:var(--text-primary);" class="tabular-nums" data-cms="hotline">@ssrSettings.Hotline</strong></span>
+                    </span>
+                    <span style="display:inline-flex;align-items:center;gap:7px;">
+                        <iconify-icon icon="lucide:mail" width="15" style="color:var(--brand-primary);flex-shrink:0;"></iconify-icon>
+                        <span>contact@spikepickleball.vn</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="site-footer-bottom">
+            <span>© 2026 Spike Pickleball Club. Bảo lưu mọi quyền.</span>
+            <span>Mặt sân Cushion 8 lớp &amp; Đặt sân mã QR định chuẩn</span>
         </div>
     </footer>
 

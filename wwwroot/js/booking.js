@@ -659,6 +659,93 @@ function renderTimeSlotGrid() {
       select.value = selectedStartTime;
     }
   }
+
+  renderBookingCourtMatrix();
+}
+
+function selectMatrixSlot(courtId, time) {
+  if (!isSlotAvailable(courtId, selectedDate, time, selectedDuration)) return;
+  const parsedId = Number(courtId);
+  if (Number(selectedCourtId) !== parsedId) {
+    selectedCourtId = parsedId;
+    renderCourtOptions();
+    renderTimeline();
+  }
+  selectedStartTime = time;
+  invalidateServerQuote();
+  syncBookingUrlState();
+  renderTimeSlotGrid();
+  updatePriceBreakdown(true);
+}
+
+function renderBookingCourtMatrix() {
+  const table = document.getElementById('bookingCourtMatrix');
+  if (!table) return;
+
+  if (!HAS_SERVER_STATE) {
+    table.innerHTML = `<tbody><tr><td style="padding:16px;">${renderUiStateBanner('loading', { compact: true })}</td></tr></tbody>`;
+    return;
+  }
+
+  if (COURTS.length === 0) {
+    table.innerHTML = `<tbody><tr><td style="padding:16px;">${renderUiStateBanner('empty', { compact: true, title: 'Chưa có sân khả dụng' })}</td></tr></tbody>`;
+    return;
+  }
+
+  const slots = getDynamicTimeSlots(selectedDuration);
+  if (slots.length === 0) {
+    table.innerHTML = `<tbody><tr><td style="padding:16px;">Không có khung giờ phù hợp với thời lượng ${selectedDuration} phút.</td></tr></tbody>`;
+    return;
+  }
+
+  const todayStr = getTodayStr();
+  const nowMins = getNowMinutes();
+
+  let html = '<thead><tr><th class="sn-matrix-time-col">Giờ</th>';
+  COURTS.forEach(c => {
+    const shortName = escapeHtml(String(c.name || '').replace(' (Arena A)', '').replace(' (Arena B)', ''));
+    html += `<th>${shortName}<div style="font-size:0.7rem;font-weight:500;color:var(--text-muted);">${c.type === 'Indoor' ? 'Indoor' : 'Outdoor'}</div></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  slots.forEach(time => {
+    html += `<tr><td class="sn-matrix-time-col">${escapeHtml(time)}</td>`;
+    COURTS.forEach(c => {
+      const check = checkCourtConflict(c.id, selectedDate, time, selectedDuration);
+      const isPast = selectedDate === todayStr && timeToMinutes(time) < (nowMins - 5);
+      const isSel = !isPast && !check.conflict && Number(c.id) === Number(selectedCourtId) && time === selectedStartTime;
+
+      let stateClass = 'is-free';
+      let label = '○ Đặt';
+      let disabled = '';
+      if (isSel) {
+        stateClass = 'is-selected';
+        label = '● Đã chọn';
+      } else if (isPast) {
+        stateClass = 'is-past';
+        label = '— Qua';
+        disabled = 'disabled';
+      } else if (check.conflict) {
+        disabled = 'disabled';
+        if (check.type === 'lock') {
+          stateClass = 'is-locked';
+          label = '✕ Khóa';
+        } else if (check.record && check.record.status === 'pending') {
+          stateClass = 'is-pending';
+          label = '◷ Giữ';
+        } else {
+          stateClass = 'is-booked';
+          label = '■ Kín';
+        }
+      }
+
+      html += `<td><button type="button" class="sn-matrix-cell-btn ${stateClass}" ${disabled} onclick="selectMatrixSlot(${Number(c.id)}, '${escapeAttr(time)}')" aria-label="${escapeAttr(c.name)} ${time}">${label}</button></td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody>';
+  table.innerHTML = html;
 }
 
 function selectStartTime(time) {
@@ -978,6 +1065,11 @@ function applyQuoteToDom(quote) {
 
   updateQuoteBadgeDom();
   syncSubmitButtonState();
+
+  const mobDt = document.getElementById('mobileBookingDateTime');
+  const mobTot = document.getElementById('mobileBookingTotal');
+  if (mobDt) mobDt.textContent = `${court ? court.name : 'Sân'} · ${selectedStartTime || '--'} → ${endTime}`;
+  if (mobTot) mobTot.textContent = formatMoney(grandTotal);
 }
 
 function updatePriceBreakdown(fetchAuthoritative = false) {

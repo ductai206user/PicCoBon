@@ -6,12 +6,11 @@
 <section class="page-hero">
     <div class="container page-hero-inner">
         <div>
-            <span class="section-kicker" style="color:var(--color-volt);">Tiện ích &amp; Dịch vụ tại sân</span>
-            <h1 class="page-hero-title">Cửa Hàng Pro Shop, Giải Khát &amp; Dụng Cụ</h1>
-            <p class="page-hero-sub">Đặt nước bù khoáng, đồ ăn nhẹ và thuê vợt Carbon T700 giao tận sân thi đấu hoặc mua lẻ nhận tại quầy</p>
+            <h1 class="page-hero-title">Cửa hàng Pro Shop, Giải khát &amp; Dụng cụ</h1>
+            <p class="page-hero-sub">Đặt nước bù khoáng, đồ ăn nhẹ và thuê vợt giao tận sân thi đấu hoặc nhận nhanh tại quầy thu ngân.</p>
         </div>
-        <div class="page-hero-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <a href="/Booking" class="btn btn-outline btn-sm" style="border-color:rgba(255,255,255,0.22);color:#FFFFFF;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/Booking" class="btn btn-secondary btn-sm">
                 <iconify-icon icon="lucide:calendar-check" width="16"></iconify-icon>
                 <span>Đặt lịch sân</span>
             </a>
@@ -19,49 +18,48 @@
     </div>
 </section>
 
-<main class="page-main">
+<main class="page-main" style="padding:28px 0 88px;">
     <div class="container stack">
-        <!-- Thanh điều khiển hợp nhất: Tìm kiếm + Lọc danh mục -->
+        <!-- Toolbar: Search + Category Filter Tabs -->
         <div class="shop-toolbar">
-            <div class="input-icon-wrap shop-search-box">
-                <iconify-icon icon="lucide:search" class="input-icon-left" width="18"></iconify-icon>
-                <input type="text" id="menuSearchInput" class="form-input" placeholder="Tìm nhanh nước điện giải, mì trộn, vợt Carbon, bóng..." oninput="renderMenu()">
+            <div class="sn-search-field shop-search-box" style="flex:1;min-width:240px;">
+                <iconify-icon icon="lucide:search" width="16" class="sn-search-field-icon"></iconify-icon>
+                <input type="text" id="menuSearchInput" class="form-input" placeholder="Tìm nhanh nước điện giải, đồ ăn nhẹ, vợt, bóng..." oninput="renderMenu()">
             </div>
             <div class="filter-tabs" id="menuCategoryTabs" role="tablist" aria-label="Danh mục sản phẩm Pro Shop">
                 <button type="button" class="filter-tab active" role="tab" aria-selected="true" data-cat="all" onclick="filterMenuCategory('all')">Tất cả (<span id="menuCount">0</span>)</button>
-                <button type="button" class="filter-tab" role="tab" aria-selected="false" data-cat="drink" onclick="filterMenuCategory('drink')">Đồ uống bù khoáng</button>
+                <button type="button" class="filter-tab" role="tab" aria-selected="false" data-cat="drink" onclick="filterMenuCategory('drink')">Đồ uống</button>
                 <button type="button" class="filter-tab" role="tab" aria-selected="false" data-cat="food" onclick="filterMenuCategory('food')">Đồ ăn nhẹ</button>
-                <button type="button" class="filter-tab" role="tab" aria-selected="false" data-cat="other" onclick="filterMenuCategory('other')">Thuê vợt &amp; Bóng</button>
+                <button type="button" class="filter-tab" role="tab" aria-selected="false" data-cat="other" onclick="filterMenuCategory('other')">Vợt &amp; Bóng</button>
             </div>
         </div>
 
         <div class="card" id="addMenuItemCard" data-role="admin" style="display:none;">
             <div class="card-header">
                 <span class="card-header-title">
-                    <iconify-icon icon="lucide:package-check" width="18" style="color:var(--color-primary)"></iconify-icon>
+                    <iconify-icon icon="lucide:package-check" width="17" style="color:var(--brand-primary)"></iconify-icon>
                     <span>Quản trị tồn kho &amp; Danh mục mặt hàng Pro Shop / POS</span>
                 </span>
-                <div style="display:flex;gap:0.5rem;">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <a href="/Admin/Products/Create" class="btn btn-primary btn-xs">+ Thêm sản phẩm mới</a>
-                    <a href="/Admin/Products" class="btn btn-outline btn-xs">Quản lý tồn kho</a>
+                    <a href="/Admin/Products" class="btn btn-secondary btn-xs">Quản lý tồn kho</a>
                 </div>
             </div>
         </div>
 
-        <!-- Bố cục 2 cột: Danh mục sản phẩm & Giỏ hàng -->
+        <!-- 2-Column Storefront + Sticky Cart -->
         <div class="shop-layout">
             <div class="shop-main-col">
                 <div class="menu-grid" id="menuGrid"></div>
             </div>
 
-            <!-- CỘT PHẢI: GIỎ HÀNG PRO SHOP & GIAO TẬN SÂN -->
             <aside class="card sticky-panel shop-cart-panel" id="shopCartPanel">
-                <div class="card-header shop-cart-header">
-                    <span class="card-header-title" style="color:#FFF;">
-                        <iconify-icon icon="lucide:shopping-bag" width="18" style="color:var(--color-volt);"></iconify-icon>
-                        <span>Giỏ Hàng Dịch Vụ</span>
+                <div class="card-header sn-summary-header">
+                    <span class="card-header-title">
+                        <iconify-icon icon="lucide:shopping-bag" width="17" style="color:var(--brand-primary);"></iconify-icon>
+                        <span>Giỏ hàng dịch vụ</span>
                     </span>
-                    <span class="badge" style="background:rgba(212,255,0,0.18);color:var(--color-volt);" id="shopCartBadge" aria-live="polite" aria-atomic="true">0 món</span>
+                    <span class="badge badge-primary tabular-nums" id="shopCartBadge" aria-live="polite" aria-atomic="true">0 món</span>
                 </div>
 
                 <div class="card-body shop-cart-body">
@@ -69,20 +67,20 @@
 
                     <div class="shop-checkout-form">
                         <div class="form-group">
-                            <label class="form-label" for="shopOrderBooking">Nhận đồ tại quầy / Gộp vào sân đang chơi</label>
+                            <label class="form-label" for="shopOrderBooking">Nhận tại quầy hoặc gộp vào ca sân</label>
                             <select id="shopOrderBooking" class="form-select" onchange="toggleGuestBookingAttach()">
                                 <option value="">-- Mua lẻ / Nhận trực tiếp tại quầy --</option>
                             </select>
-                            <div id="shopOrderBookingHint" class="text-xs text-muted" style="margin-top:0.35rem;display:none;"></div>
+                            <div id="shopOrderBookingHint" class="text-xs text-muted" style="margin-top:4px;display:none;"></div>
                         </div>
 
-                        <div id="guestBookingAttachFields" class="sh-subtle-panel" style="display:none;padding:0.65rem;margin-bottom:0.75rem;">
-                            <div class="form-group" style="margin-bottom:0.5rem;">
+                        <div id="guestBookingAttachFields" class="sh-subtle-panel" style="display:none;padding:10px;margin-bottom:12px;">
+                            <div class="form-group" style="margin-bottom:8px;">
                                 <label class="form-label text-xs" for="shopGuestBookingCode">Mã đặt sân đang chơi / đã duyệt *</label>
                                 <input type="text" id="shopGuestBookingCode" class="form-input text-mono" placeholder="VD: PB-2611A9">
                             </div>
                             <div class="form-group" style="margin-bottom:0;">
-                                <label class="form-label text-xs" for="shopGuestAccessToken">Mã bảo mật vé (bk_...) để xác thực chủ sân *</label>
+                                <label class="form-label text-xs" for="shopGuestAccessToken">Mã bảo mật vé (bk_...) *</label>
                                 <input type="text" id="shopGuestAccessToken" class="form-input text-mono" placeholder="Nhập mã bk_... đã cấp khi đặt sân">
                             </div>
                         </div>
@@ -99,19 +97,19 @@
 
                         <div class="form-group">
                             <label class="form-label" for="shopOrderNote">Vị trí giao / Ghi chú tại sân</label>
-                            <input type="text" id="shopOrderNote" class="form-input" placeholder="VD: Giao ra Sân VIP 01 hoặc Nhận tại quầy">
+                            <input type="text" id="shopOrderNote" class="form-input" placeholder="VD: Giao ra Sân 01 hoặc Nhận tại quầy">
                         </div>
 
-                        <div class="payment-summary">
+                        <div class="payment-summary" style="border-radius:var(--radius-md);">
                             <div class="payment-line total" style="padding-top:0;border-top:none;">
                                 <span>Tổng phải thu</span>
-                                <span class="text-mono" id="shopCartTotal" aria-live="polite" aria-atomic="true">0 đ</span>
+                                <span class="text-mono tabular-nums" id="shopCartTotal" style="color:var(--brand-primary);" aria-live="polite" aria-atomic="true">0 đ</span>
                             </div>
                         </div>
 
                         <button type="button" class="btn btn-primary btn-block btn-lg mt-sm" id="btnSubmitShopOrder" onclick="submitShopOrder()">
                             <iconify-icon icon="lucide:check-circle-2" width="18"></iconify-icon>
-                            <span>Xác nhận Đặt Dịch Vụ</span>
+                            <span>Xác nhận đặt dịch vụ</span>
                         </button>
                     </div>
                 </div>
@@ -119,12 +117,12 @@
         </div>
     </div>
 
-    <!-- THANH GIỎ HÀNG CỐ ĐỊNH TRÊN MOBILE (UI-B05) -->
-    <div class="mobile-shop-cart-bar" id="mobileShopCartBar" role="region" aria-label="Tóm tắt giỏ hàng Pro Shop">
+    <!-- Mobile Sticky Cart Summary Bar -->
+    <div class="mobile-shop-cart-bar no-print" id="mobileShopCartBar" role="region" aria-label="Tóm tắt giỏ hàng Pro Shop">
         <div class="mobile-shop-cart-bar-inner">
             <div class="mobile-shop-cart-summary">
                 <span class="mobile-shop-cart-count" id="mobileCartCount" aria-live="polite" aria-atomic="true">0 món</span>
-                <span class="mobile-shop-cart-total text-mono" id="mobileCartTotal" aria-live="polite" aria-atomic="true">0 đ</span>
+                <span class="mobile-shop-cart-total text-mono tabular-nums" id="mobileCartTotal" aria-live="polite" aria-atomic="true">0 đ</span>
             </div>
             <button type="button" class="btn btn-primary btn-sm" id="mobileCartActionBtn" onclick="scrollToShopCartPanel()">
                 <iconify-icon icon="lucide:shopping-bag" width="16"></iconify-icon>
@@ -134,28 +132,28 @@
     </div>
 </main>
 
-<!-- MODAL XÁC NHẬN ĐƠN HÀNG PRO SHOP -->
+<!-- Order Confirmation Modal -->
 <div class="modal-overlay" id="modalShopOrder">
     <div class="modal modal-sm">
         <div class="modal-header">
-            <h3 class="modal-title" style="color:var(--color-primary);">Đặt dịch vụ thành công</h3>
-            <button class="modal-close" onclick="closeModal('modalShopOrder')">✕</button>
+            <h3 class="modal-title">Đặt dịch vụ thành công</h3>
+            <button type="button" class="modal-close" onclick="closeModal('modalShopOrder')" aria-label="Đóng">✕</button>
         </div>
-        <div class="modal-body" style="text-align:center;">
-            <div class="qr-placeholder" style="padding:1.25rem;">
-                <iconify-icon icon="lucide:cup-soda" width="56" style="color:var(--color-primary);"></iconify-icon>
+        <div class="modal-body" style="text-align:center;padding:20px;">
+            <div style="padding:14px;background:var(--surface-secondary);border:1px solid var(--border-default);border-radius:var(--radius-md);">
+                <iconify-icon icon="lucide:cup-soda" width="44" style="color:var(--brand-primary);"></iconify-icon>
                 <div class="text-sm font-bold text-mono mt-xs" id="ordSuccessCode">ORD-0001</div>
             </div>
-            <p class="text-xs text-muted mt-sm">Tồn kho đã được giữ cho đơn của bạn. Thanh toán được thực hiện tại quầy thu ngân CLB.</p>
+            <p class="text-xs text-muted mt-sm">Tồn kho đã được giữ cho đơn của bạn. Thanh toán thực hiện tại quầy thu ngân CLB.</p>
 
-            <div class="payment-summary mt-md" style="text-align:left;">
+            <div class="payment-summary mt-md" style="text-align:left;border-radius:var(--radius-md);">
                 <div class="payment-line"><span class="text-muted">Khách hàng</span><span class="font-bold" id="ordSuccessName"></span></div>
                 <div class="payment-line"><span class="text-muted">Hình thức nhận</span><span class="font-semibold" id="ordSuccessDelivery"></span></div>
-                <div class="payment-line total"><span>Tổng phải thanh toán</span><span class="font-bold text-mono" id="ordSuccessTotal"></span></div>
+                <div class="payment-line total"><span>Tổng phải thu</span><span class="font-bold text-mono tabular-nums" id="ordSuccessTotal"></span></div>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-primary btn-block" onclick="closeModal('modalShopOrder')">Hoàn tất</button>
+        <div class="modal-footer" style="padding:12px 20px;">
+            <button type="button" class="btn btn-primary btn-block" onclick="closeModal('modalShopOrder')">Hoàn tất</button>
         </div>
     </div>
 </div>

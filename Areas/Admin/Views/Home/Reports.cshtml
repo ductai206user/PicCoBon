@@ -3,23 +3,20 @@
     ViewData["Title"] = "Báo Cáo Sổ Cái Doanh Thu & Công Nợ";
 }
 
-  <section class="page-hero">
-    <div class="container page-hero-inner">
-      <div>
-        <span class="section-kicker" style="color:var(--color-volt);">Phân tích tài chính chuẩn sổ cái</span>
-        <h1 class="page-hero-title">Báo Cáo Doanh Thu Thực Thu &amp; Công Nợ</h1>
-        <p class="page-hero-sub">Tổng hợp trực tiếp từ bút toán Sổ cái (Payment Ledger) theo đúng ngày thu/hoàn tiền thực tế</p>
-      </div>
-      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+<div class="sn-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border-default);">
+    <div>
+        <h1 class="sn-h1" style="margin:0;font-size:1.65rem;font-weight:700;">Báo cáo Doanh thu &amp; Sổ cái Thu chi</h1>
+        <p style="margin:5px 0 0;color:var(--text-secondary);font-size:0.9rem;">Tổng hợp trực tiếp từ bút toán Sổ cái (Payment Ledger) theo ngày thu và hoàn tiền thực tế.</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <label for="reportFrom" class="sr-only">Từ ngày</label>
-        <input class="form-input text-mono" type="date" id="reportFrom" aria-label="Từ ngày" style="width:auto;">
+        <input class="form-input text-mono" type="date" id="reportFrom" aria-label="Từ ngày" style="width:auto;min-height:36px;">
         <span style="color:var(--text-muted)" aria-hidden="true">→</span>
         <label for="reportTo" class="sr-only">Đến ngày</label>
-        <input class="form-input text-mono" type="date" id="reportTo" aria-label="Đến ngày" style="width:auto;">
-        <button type="button" class="btn btn-primary" id="btnFilterReport" onclick="filterReport()">Lọc sổ cái</button>
-      </div>
+        <input class="form-input text-mono" type="date" id="reportTo" aria-label="Đến ngày" style="width:auto;min-height:36px;">
+        <button type="button" class="btn btn-primary btn-sm" id="btnFilterReport" onclick="filterReport()">Lọc sổ cái</button>
     </div>
-  </section>
+</div>
 
   <main class="page-main">
     <div class="container stack">
