@@ -843,7 +843,7 @@ public class ApiDbController : ControllerBase
     [HttpPost("/api/bookings")]
     public async Task<IActionResult> CreateBooking(
         [FromBody] JsonElement payload,
-        [FromServices] IOptionsMonitor<PayPalOptions> payPalOptions)
+        [FromServices] PayPalPaymentService payPalPaymentService)
     {
         int courtId = payload.TryGetProperty("courtId", out var cEl) && cEl.TryGetInt32(out int cid) ? cid : 0;
         string customerName = payload.TryGetProperty("customerName", out var cnEl)
@@ -869,8 +869,8 @@ public class ApiDbController : ControllerBase
         string? paymentMethod = payload.TryGetProperty("paymentMethod", out var pmEl) ? pmEl.GetString() : "cash";
         if (string.Equals((paymentMethod ?? string.Empty).Trim(), "paypal", StringComparison.OrdinalIgnoreCase))
         {
-            var cfg = payPalOptions.CurrentValue.ValidateForCheckout();
-            if (!cfg.IsValid)
+            var cfg = await payPalPaymentService.ValidateCheckoutReadinessAsync(_context, HttpContext.RequestAborted);
+            if (!cfg.IsReady)
             {
                 return StatusCode(503, new
                 {
@@ -1937,7 +1937,6 @@ public class ApiDbController : ControllerBase
     [HttpPost("/api/orders/create")]
     public async Task<IActionResult> CreateOrderApi(
         [FromBody] JsonElement payload,
-        [FromServices] IOptionsMonitor<PayPalOptions> payPalOptions,
         [FromServices] PayPalPaymentService payPalPaymentService)
     {
         string customerName = payload.TryGetProperty("customerName", out var nProp) ? (nProp.GetString() ?? string.Empty) : string.Empty;
@@ -1952,8 +1951,8 @@ public class ApiDbController : ControllerBase
 
         if (string.Equals((paymentMethod ?? string.Empty).Trim(), "paypal", StringComparison.OrdinalIgnoreCase))
         {
-            var cfg = payPalOptions.CurrentValue.ValidateForCheckout();
-            if (!cfg.IsValid)
+            var cfg = await payPalPaymentService.ValidateCheckoutReadinessAsync(_context, HttpContext.RequestAborted);
+            if (!cfg.IsReady)
             {
                 return StatusCode(503, new { ok = false, code = cfg.ErrorCode, error = cfg.ErrorMessage });
             }
@@ -2247,12 +2246,14 @@ public class ApiDbController : ControllerBase
             .Where(t => t.PaymentMethod == "paypal")
             .Sum(t => string.Equals(t.TransactionType, "refund", StringComparison.OrdinalIgnoreCase) ? -Math.Abs(t.Amount) : Math.Max(0, t.Amount));
 
-        int payPalReconciliationCount = await _context.TbPayPalTransactions
-            .AsNoTracking()
-            .CountAsync(x => x.LocalStatus == "AmbiguousTimeout" ||
-                             x.LocalStatus == "CapturedCompensationPending" ||
-                             x.LocalStatus == "CompensationRefundRequired" ||
-                             x.LocalStatus == "Capturing");
+        int payPalReconciliationCount = await PayPalPaymentService.IsPayPalSchemaAvailableAsync(_context)
+            ? await _context.TbPayPalTransactions
+                .AsNoTracking()
+                .CountAsync(x => x.LocalStatus == "AmbiguousTimeout" ||
+                                 x.LocalStatus == "CapturedCompensationPending" ||
+                                 x.LocalStatus == "CompensationRefundRequired" ||
+                                 x.LocalStatus == "Capturing")
+            : 0;
 
         // Operational bookings within [dateFrom..dateTo] for occupancy & receivables visibility
         var bookingsInRange = await _context.TbBookings

@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -1259,5 +1261,101 @@ public class PayPalSandboxIntegrationTests : IClassFixture<PayPalTestWebAppFacto
         var bk = await db.TbBookings.AsNoTracking().FirstAsync(b => b.BookingCode == bookingCode);
         Assert.Equal("paid", bk.PaymentStatus);
         Assert.Equal(amountDue, bk.PaidAmount);
+    }
+
+    [Fact]
+    public async Task TC21_MissingPayPalTableSchema_DisablesConfigAndReturns503InsteadOf500()
+    {
+        string preV5DbName = "PickleballClub_PreV5Test_" + Guid.NewGuid().ToString("N")[..8];
+        string preV5Conn = $"Server=.\\SQLEXPRESS;Database={preV5DbName};Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
+        string masterConn = "Server=.\\SQLEXPRESS;Database=master;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
+
+        try
+        {
+            using var preV5Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Testing");
+                builder.ConfigureAppConfiguration((_, cfg) =>
+                {
+                    cfg.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:DefaultConnection"] = preV5Conn,
+                        ["Security:QrSigningKey"] = "PreV5Test-HMAC-SecretKey-2026-SpikePickleball-32CharsPlus!",
+                        ["BackgroundWorkers:Enabled"] = "false",
+                        ["PayPal:Environment"] = "Sandbox",
+                        ["PayPal:BaseUrl"] = PayPalOptions.OfficialSandboxBaseUrl,
+                        ["PayPal:ClientId"] = "sbx-test-client-id",
+                        ["PayPal:ClientSecret"] = "sbx-test-client-secret",
+                        ["PayPal:Currency"] = "USD",
+                        ["PayPal:VndPerUsd"] = "26000"
+                    });
+                });
+                builder.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<DbContextOptions<PickleballContext>>();
+                    services.AddDbContext<PickleballContext>(opts => opts.UseSqlServer(preV5Conn));
+                });
+            });
+
+            using (var scope = preV5Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
+                var migrator = db.GetInfrastructure().GetRequiredService<IMigrator>();
+                await migrator.MigrateAsync("20261109123000_V4_HoldTtlIdempotencyAndOrderFulfillment");
+
+                var cat = new TbProductCategory { Title = "Đồ Uống", Alias = "do-uong", IsActive = true };
+                db.TbProductCategories.Add(cat);
+                await db.SaveChangesAsync();
+                db.TbProducts.Add(new TbProduct { Title = "Nước suối", CategoryProductId = cat.CategoryProductId, Price = 15000, UnitInStock = 10, Quantity = 10, IsActive = true });
+                await db.SaveChangesAsync();
+            }
+
+            using var client = preV5Factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                BaseAddress = new Uri("https://localhost"),
+                AllowAutoRedirect = false,
+                HandleCookies = true
+            });
+
+            var cfgResp = await client.GetAsync("/api/payments/paypal/config");
+            Assert.Equal(HttpStatusCode.OK, cfgResp.StatusCode);
+            using var cfgDoc = JsonDocument.Parse(await cfgResp.Content.ReadAsStringAsync());
+            Assert.False(cfgDoc.RootElement.GetProperty("enabled").GetBoolean());
+            Assert.Equal("PAYPAL_SCHEMA_NOT_MIGRATED", cfgDoc.RootElement.GetProperty("disabledCode").GetString());
+
+            var ordResp = await PostJsonWithCsrfAsync(client, "/api/orders/create", new
+            {
+                customerName = "PreV5 Guard",
+                phone = "0909111333",
+                paymentMethod = "paypal",
+                idempotencyKey = Guid.NewGuid().ToString("N"),
+                items = new[] { new { productId = 1, qty = 1 } }
+            });
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, ordResp.StatusCode);
+            using var ordDoc = JsonDocument.Parse(await ordResp.Content.ReadAsStringAsync());
+            Assert.Equal("PAYPAL_SCHEMA_NOT_MIGRATED", ordDoc.RootElement.GetProperty("code").GetString());
+
+            var ppCreateResp = await PostJsonWithCsrfAsync(client, "/api/payments/paypal/create-order", new
+            {
+                targetType = "order",
+                targetCode = "ORD-ANY",
+                idempotencyKey = Guid.NewGuid().ToString("N")
+            });
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, ppCreateResp.StatusCode);
+        }
+        finally
+        {
+            SqlConnection.ClearAllPools();
+            await using var conn = new SqlConnection(masterConn);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = $@"
+IF DB_ID(N'{preV5DbName}') IS NOT NULL
+BEGIN
+    ALTER DATABASE [{preV5DbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE [{preV5DbName}];
+END";
+            await cmd.ExecuteNonQueryAsync();
+        }
     }
 }

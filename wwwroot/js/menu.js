@@ -930,7 +930,7 @@ async function submitShopOrder() {
     document.getElementById('ordSuccessName').textContent = `${ord.customerName} ${ord.phone ? `(${ord.phone})` : ''}`;
     document.getElementById('ordSuccessDelivery').textContent = ord.bookingCode
       ? `Đã gộp vào công nợ đặt sân #${ord.bookingCode}`
-      : `${ord.address || deliveryNote || 'Nhận tại quầy Pro Shop'} (Thanh toán tại quầy)`;
+      : `${ord.address || deliveryNote || 'Nhận tại quầy Pro Shop'} (${selectedShopPaymentMethod === 'paypal' ? 'Chờ thanh toán PayPal · Có thể trả tại quầy' : 'Thanh toán tại quầy'})`;
     document.getElementById('ordSuccessTotal').textContent = formatMoney(ord.totalAmount);
 
     openModal('modalShopOrder');

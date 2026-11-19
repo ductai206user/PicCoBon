@@ -94,20 +94,20 @@ public sealed class PaymentController : Controller
 
     [HttpGet("/api/payments/paypal/config")]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult GetPayPalPublicConfig()
+    public async Task<IActionResult> GetPayPalPublicConfig(CancellationToken cancellationToken)
     {
         var opts = _payPalOptions.CurrentValue;
-        var check = opts.ValidateForCheckout();
+        var check = await _payPalPaymentService.ValidateCheckoutReadinessAsync(_context, cancellationToken);
         return Ok(new
         {
             ok = true,
-            enabled = check.IsValid,
+            enabled = check.IsReady,
             environment = opts.Environment,
             currency = opts.Currency,
             vndPerUsd = opts.VndPerUsd,
             brandName = opts.BrandName,
-            disabledCode = check.IsValid ? null : check.ErrorCode,
-            disabledReason = check.IsValid ? null : check.ErrorMessage
+            disabledCode = check.IsReady ? null : check.ErrorCode,
+            disabledReason = check.IsReady ? null : check.ErrorMessage
         });
     }
 
@@ -282,6 +282,16 @@ public sealed class PaymentController : Controller
         [FromQuery] int limit = 60,
         CancellationToken cancellationToken = default)
     {
+        if (!await PayPalPaymentService.IsPayPalSchemaAvailableAsync(_context, cancellationToken))
+        {
+            return Ok(new
+            {
+                ok = true,
+                schemaNotMigrated = true,
+                transactions = Array.Empty<object>()
+            });
+        }
+
         int clampedLimit = Math.Clamp(limit, 1, 200);
         var query = _context.TbPayPalTransactions.AsNoTracking().AsQueryable();
 

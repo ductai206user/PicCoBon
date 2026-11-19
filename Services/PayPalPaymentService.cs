@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -244,16 +245,67 @@ public sealed class PayPalPaymentService
     private string ProtectState(PayPalStatePayload payload) =>
         _stateProtector.Protect(JsonSerializer.Serialize(payload));
 
+    private static readonly ConcurrentDictionary<string, (bool Exists, DateTime CheckedAtUtc)> _schemaCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static async Task<bool> IsPayPalSchemaAvailableAsync(PickleballContext db, CancellationToken cancellationToken = default)
+    {
+        if (!db.Database.IsRelational())
+        {
+            return true;
+        }
+
+        string dbKey = db.Database.GetConnectionString() ?? db.Database.GetDbConnection().Database ?? "default";
+        DateTime now = DateTime.UtcNow;
+        if (_schemaCache.TryGetValue(dbKey, out var cached) &&
+            (now - cached.CheckedAtUtc) < TimeSpan.FromSeconds(2))
+        {
+            return cached.Exists;
+        }
+
+        try
+        {
+            int existsFlag = await db.Database
+                .SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'dbo.tb_PayPalTransaction', N'U') IS NOT NULL THEN 1 ELSE 0 END AS [Value]")
+                .FirstOrDefaultAsync(cancellationToken);
+            bool exists = existsFlag == 1;
+            _schemaCache[dbKey] = (exists, now);
+            return exists;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<(bool IsReady, string ErrorCode, string ErrorMessage)> ValidateCheckoutReadinessAsync(
+        PickleballContext db,
+        CancellationToken cancellationToken = default)
+    {
+        var configCheck = _optionsMonitor.CurrentValue.ValidateForCheckout();
+        if (!configCheck.IsValid)
+        {
+            return configCheck;
+        }
+
+        if (!await IsPayPalSchemaAvailableAsync(db, cancellationToken))
+        {
+            return (false, "PAYPAL_SCHEMA_NOT_MIGRATED",
+                "Cơ sở dữ liệu hiện tại chưa cập nhật bảng tb_PayPalTransaction (cần chạy migration V5_PayPalSandboxIntegration). Vui lòng sao lưu DB và chạy 'dotnet ef database update'.");
+        }
+
+        return (true, string.Empty, string.Empty);
+    }
+
     public async Task<PayPalCheckoutResult> CreateCheckoutAsync(
         PickleballContext db,
         PayPalCreateCheckoutInput input,
         CancellationToken cancellationToken = default)
     {
         var opts = _optionsMonitor.CurrentValue;
-        var configCheck = opts.ValidateForCheckout();
-        if (!configCheck.IsValid)
+        var readiness = await ValidateCheckoutReadinessAsync(db, cancellationToken);
+        if (!readiness.IsReady)
         {
-            return PayPalCheckoutResult.Fail(configCheck.ErrorMessage, 503, configCheck.ErrorCode);
+            return PayPalCheckoutResult.Fail(readiness.ErrorMessage, 503, readiness.ErrorCode);
         }
 
         string targetType = (input.TargetType ?? "booking").Trim().ToLowerInvariant();
@@ -956,8 +1008,8 @@ public sealed class PayPalPaymentService
         DateTime? referenceUtcNow = null,
         CancellationToken cancellationToken = default)
     {
-        var opts = _optionsMonitor.CurrentValue;
-        if (!opts.ValidateForCheckout().IsValid)
+        var readiness = await ValidateCheckoutReadinessAsync(db, cancellationToken);
+        if (!readiness.IsReady)
         {
             return 0;
         }

@@ -8,7 +8,7 @@
 
 ## 1. Automated Integration & Regression Suite (`PickleballClub.Tests`)
 
-Executed via `dotnet test e:\pickleball\PickleballClub.Tests\PickleballClub.Tests.csproj -c Release --nologo` (`58 / 58` scenarios: `38` pre-existing regression/concurrency/QR/UI-parity tests + `20` dedicated PayPal Sandbox integration tests using `FakePayPalClient` + real SQL Server transactions & filtered unique constraints).
+Executed via `dotnet test e:\pickleball\PickleballClub.Tests\PickleballClub.Tests.csproj -c Release --nologo` (`59 / 59` scenarios: `38` pre-existing regression/concurrency/QR/UI-parity tests + `21` dedicated PayPal Sandbox integration tests using `FakePayPalClient` + real SQL Server transactions & filtered unique constraints).
 
 | Test ID | Scenario Verified | Outcome |
 |---|---|---|
@@ -32,6 +32,7 @@ Executed via `dotnet test e:\pickleball\PickleballClub.Tests\PickleballClub.Test
 | `TC18` | `PayPalPaymentService.ReconcileStaleAttemptsAsync` resolves aged `AwaitingApproval` where buyer approved in PayPal | PASS |
 | `TC19` | Admin `POST /api/admin/paypal/{attemptCode}/refund` executes refund and posts `-Amount` counter ledger row; manual cashier endpoint blocks `paymentMethod="paypal"` spoofing (`400`) | PASS |
 | `TC20` | `POST /api/webhooks/paypal` rejects unverified signatures (`401`) and processes verified `CHECKOUT.ORDER.APPROVED` webhooks idempotently | PASS |
+| `TC21` | Pre-V5 database missing `tb_PayPalTransaction` disables `/api/payments/paypal/config` (`PAYPAL_SCHEMA_NOT_MIGRATED`) and fails closed `503` before creating orders/bookings instead of crashing `500` | PASS |
 | Existing Suite | `38` pre-existing regression, V4 QR, Pro Shop V6, Shadcn Admin V7 parity, HTTP security, and SQL migration/concurrency tests | PASS |
 
 ---
