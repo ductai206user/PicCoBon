@@ -1,0 +1,57 @@
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    bool isValidState = ViewBag.IsValidState is bool b && b;
+    string stateToken = ViewBag.StateToken as string ?? string.Empty;
+    string payPalOrderId = ViewBag.PayPalOrderId as string ?? string.Empty;
+    string attemptCode = ViewBag.AttemptCode as string ?? string.Empty;
+    string targetType = ViewBag.TargetType as string ?? "booking";
+    string targetCode = ViewBag.TargetCode as string ?? string.Empty;
+}
+
+<main id="mainContent" class="page-main spk-paypal-page" style="padding:36px 0 64px;">
+    <div id="paypalCheckoutPageRoot"
+         data-pp-mode="cancel"
+         data-pp-valid-state="@(isValidState ? "true" : "false")"
+         data-pp-state="@stateToken"
+         data-pp-order-id="@payPalOrderId"
+         data-pp-attempt="@attemptCode"
+         data-pp-target-type="@targetType"
+         data-pp-target-code="@targetCode"
+         class="container"
+         style="max-width:680px;">
+
+        <div class="card spk-pp-outcome-card" id="paypalOutcomeCard">
+            <div class="card-header" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span class="badge badge-warning" id="ppStatusBadge">ĐÃ HỦY THANH TOÁN PAYPAL</span>
+                <span class="spk-sandbox-pill">
+                    <iconify-icon icon="lucide:flask-conical" width="13"></iconify-icon>
+                    <span>PAYPAL SANDBOX · TEST MODE</span>
+                </span>
+            </div>
+
+            <div class="card-body" style="padding:28px 24px;text-align:center;">
+                <div class="spk-pp-icon-circle" id="ppIconCircle" style="background:#FEF3C7;color:#B45309;">
+                    <iconify-icon icon="lucide:x-circle" width="34" id="ppMainIcon"></iconify-icon>
+                </div>
+
+                <h1 class="sn-h2" id="ppOutcomeTitle" style="margin:16px 0 8px;">Đang xử lý hủy phiên thanh toán...</h1>
+                <p id="ppOutcomeSubtitle" style="margin:0 auto 20px;max-width:520px;color:var(--text-secondary);font-size:0.93rem;line-height:1.6;">
+                    Không có khoản tiền nào được ghi nhận trừ trên hệ thống khi hủy phiên PayPal.
+                </p>
+
+                <div class="payment-summary" id="ppMetaSummary" style="display:none;max-width:540px;margin:0 auto 20px;text-align:left;border-radius:var(--radius-md);"></div>
+
+                <div id="ppActionRow" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                    <a href="/Booking" class="btn btn-primary">Quay lại Đặt sân</a>
+                    <a href="/Lookup" class="btn btn-secondary">Mở trang Tra cứu</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<div class="toast-container" id="toastContainer"></div>
+
+@section Scripts {
+    <script src="~/js/pages/paypal-checkout.js" asp-append-version="true"></script>
+}

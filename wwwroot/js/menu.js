@@ -7,6 +7,86 @@ let activeCategory = 'all';
 let menuSearchKeyword = '';
 let quickShopCart = []; // [{ id, qty }]
 let menuGridDelegationBound = false;
+let selectedShopPaymentMethod = 'cash';
+let shopPayPalConfig = { enabled: false, vndPerUsd: 0 };
+
+async function initMenuPayPalOption() {
+  if (!window.SpikePayPal) return;
+  const cfg = await SpikePayPal.getConfig();
+  shopPayPalConfig = cfg || { enabled: false, vndPerUsd: 0 };
+
+  const radio = document.getElementById('shopPayPayPal');
+  const label = document.getElementById('shopPayPayPalLabel');
+  const badge = document.getElementById('shopPayPalBadge');
+  const desc = document.getElementById('shopPayPalDesc');
+  if (!radio || !label) return;
+
+  if (cfg && cfg.enabled) {
+    radio.disabled = false;
+    label.classList.remove('is-disabled');
+    if (badge) badge.style.display = 'inline-flex';
+    if (desc) {
+      desc.textContent = `Cổng thử nghiệm PayPal Sandbox · Tỷ giá: 1 USD = ${Number(cfg.vndPerUsd).toLocaleString('vi-VN')} đ.`;
+    }
+  } else {
+    radio.disabled = true;
+    label.classList.add('is-disabled');
+    if (selectedShopPaymentMethod === 'paypal') selectShopPaymentMethod('cash');
+    if (desc) desc.textContent = cfg?.disabledReason || 'PayPal Sandbox chưa sẵn sàng.';
+  }
+  updateShopPayPalPreview();
+}
+
+function selectShopPaymentMethod(method) {
+  const clean = String(method || 'cash').toLowerCase() === 'paypal' ? 'paypal' : 'cash';
+  if (clean === 'paypal' && (!shopPayPalConfig || !shopPayPalConfig.enabled)) {
+    const cashEl = document.getElementById('shopPayCash');
+    if (cashEl) cashEl.checked = true;
+    selectedShopPaymentMethod = 'cash';
+    showToast('PayPal Sandbox chưa sẵn sàng', shopPayPalConfig?.disabledReason || 'Vui lòng thử lại sau.', 'warning');
+    return;
+  }
+  selectedShopPaymentMethod = clean;
+  document.getElementById('shopPayCashLabel')?.classList.toggle('is-selected', clean === 'cash');
+  document.getElementById('shopPayPayPalLabel')?.classList.toggle('is-selected', clean === 'paypal');
+  updateShopPayPalPreview();
+}
+
+function getCurrentShopCartTotalVnd() {
+  const menuData = Array.isArray(MENU) ? MENU : [];
+  let total = 0;
+  for (const row of quickShopCart) {
+    const item = menuData.find(m => Number(m.id) === Number(row.id));
+    if (item) total += (Number(item.price) || 0) * row.qty;
+  }
+  return total;
+}
+
+function updateShopPayPalPreview() {
+  const box = document.getElementById('shopUsdPreviewBox');
+  const textEl = document.getElementById('shopUsdPreviewText');
+  const desc = document.getElementById('shopPayPalDesc');
+  if (!box || !textEl) return;
+
+  const bookingSel = document.getElementById('shopOrderBooking')?.value || '';
+  const totalVnd = getCurrentShopCartTotalVnd();
+  const isMergedBooking = Boolean(bookingSel);
+
+  if (desc && shopPayPalConfig && shopPayPalConfig.enabled) {
+    desc.textContent = isMergedBooking
+      ? 'Đơn sẽ gộp vào hóa đơn sân đã chọn — PayPal sẽ thanh toán toàn bộ dư nợ hiện tại của hóa đơn sân để tránh thu trùng.'
+      : `Cổng thử nghiệm PayPal Sandbox · Tỷ giá: 1 USD = ${Number(shopPayPalConfig.vndPerUsd).toLocaleString('vi-VN')} đ.`;
+  }
+
+  if (shopPayPalConfig && shopPayPalConfig.enabled && totalVnd > 0 && window.SpikePayPal) {
+    box.style.display = 'flex';
+    textEl.textContent = isMergedBooking
+      ? `Giỏ hàng ${SpikePayPal.formatExchangeNote(totalVnd, shopPayPalConfig)} (+ dư nợ sân)`
+      : SpikePayPal.formatExchangeNote(totalVnd, shopPayPalConfig);
+  } else {
+    box.style.display = 'none';
+  }
+}
 
 function prefersReducedMotion() {
   return Boolean(
@@ -296,6 +376,7 @@ function initMenu() {
 
   ensureMenuGridDelegation();
   populateActiveBookingOptions();
+  initMenuPayPalOption();
   renderMenu();
   renderQuickShopCart();
 }
@@ -358,6 +439,7 @@ function toggleGuestBookingAttach() {
   const box = document.getElementById('guestBookingAttachFields');
   if (!sel || !box) return;
   box.style.display = sel.value === '__GUEST_BOOKING__' ? 'block' : 'none';
+  updateShopPayPalPreview();
 }
 
 function filterMenuCategory(cat) {
@@ -686,6 +768,7 @@ function renderQuickShopCart() {
 
   if (badgeEl) badgeEl.textContent = `${totalItems} món`;
   totalEl.textContent = formatMoney(total);
+  updateShopPayPalPreview();
 
   // Sync sticky mobile cart bar (UI-B05)
   const mobileCountEl = document.getElementById('mobileCartCount');
@@ -796,7 +879,7 @@ async function submitShopOrder() {
         address: deliveryNote || 'Nhận tại quầy Pro Shop',
         bookingCode: bookingCode || null,
         bookingAccessToken: bookingAccessToken || null,
-        paymentMethod: 'cash',
+        paymentMethod: selectedShopPaymentMethod,
         idempotencyKey,
         items: quickShopCart.map(r => ({ productId: r.id, qty: r.qty }))
       })
@@ -809,6 +892,31 @@ async function submitShopOrder() {
       renderMenu();
       renderQuickShopCart();
       return;
+    }
+
+    const createdOrd = data.order;
+    const returnedGuestToken = data.guestAccessToken || '';
+    if (returnedGuestToken && createdOrd && createdOrd.code) {
+      try {
+        window.sessionStorage.setItem(`pb_guest_token_${createdOrd.code}`, returnedGuestToken);
+      } catch (_) {}
+    }
+
+    if (selectedShopPaymentMethod === 'paypal' && window.SpikePayPal) {
+      const targetType = createdOrd && createdOrd.bookingCode ? 'booking' : 'order';
+      const targetCode = targetType === 'booking' ? createdOrd.bookingCode : createdOrd.code;
+      const targetGuestToken = targetType === 'booking' ? (bookingAccessToken || '') : returnedGuestToken;
+
+      showToast('Đang mở PayPal Sandbox...', `Chuyển hướng thanh toán cho ${targetCode}...`, 'info');
+      const ppRes = await SpikePayPal.createAndRedirect({
+        targetType,
+        targetCode,
+        guestAccessToken: targetGuestToken
+      });
+      if (ppRes && ppRes.redirecting) {
+        return;
+      }
+      showToast('Không thể chuyển hướng PayPal', (ppRes && ppRes.error) || 'Đơn hàng đã giữ tồn kho; bạn có thể thanh toán trực tiếp tại quầy.', 'warning');
     }
 
     quickShopCart = [];

@@ -26,3 +26,19 @@ function setPaddleBrand(brand) {
   if (input) input.value = brand;
   if (preview) preview.textContent = brand;
 }
+
+async function payProfileBookingPayPal(bookingCode, btnEl) {
+  if (!window.SpikePayPal || !bookingCode) return;
+  if (btnEl) btnEl.disabled = true;
+  try {
+    const res = await SpikePayPal.createAndRedirect({
+      targetType: 'booking',
+      targetCode: bookingCode
+    });
+    if (!res || !res.redirecting) {
+      showToast('Không thể thanh toán PayPal', (res && res.error) || 'Vui lòng thử lại sau.', 'error');
+    }
+  } finally {
+    if (btnEl) btnEl.disabled = false;
+  }
+}

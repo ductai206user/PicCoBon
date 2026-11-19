@@ -100,6 +100,44 @@
                             <input type="text" id="shopOrderNote" class="form-input" placeholder="VD: Giao ra Sân 01 hoặc Nhận tại quầy">
                         </div>
 
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <span class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
+                                <span>Phương thức thanh toán</span>
+                                <span class="spk-sandbox-pill" id="shopPayPalBadge" style="display:none;">SANDBOX TEST</span>
+                            </span>
+                            <div class="spk-payment-methods" role="radiogroup" aria-label="Phương thức thanh toán Pro Shop">
+                                <label class="spk-pay-option is-selected" id="shopPayCashLabel" for="shopPayCash">
+                                    <input class="spk-pay-radio" type="radio" name="shopPaymentMethod" id="shopPayCash" value="cash" checked onchange="selectShopPaymentMethod('cash')">
+                                    <div class="spk-pay-body">
+                                        <div class="spk-pay-title-row">
+                                            <span class="spk-pay-title">
+                                                <iconify-icon icon="lucide:banknote" width="15" style="color:var(--brand-primary);"></iconify-icon>
+                                                <span>Thanh toán tại quầy / Gộp hóa đơn</span>
+                                            </span>
+                                        </div>
+                                        <div class="spk-pay-desc">Giữ tồn kho ngay; trả trực tiếp khi nhận đồ hoặc gộp thanh toán vào ca sân.</div>
+                                    </div>
+                                </label>
+                                <label class="spk-pay-option" id="shopPayPayPalLabel" for="shopPayPayPal">
+                                    <input class="spk-pay-radio" type="radio" name="shopPaymentMethod" id="shopPayPayPal" value="paypal" onchange="selectShopPaymentMethod('paypal')">
+                                    <div class="spk-pay-body">
+                                        <div class="spk-pay-title-row">
+                                            <span class="spk-pay-title">
+                                                <iconify-icon icon="lucide:globe" width="15" style="color:var(--brand-primary);"></iconify-icon>
+                                                <span>PayPal Sandbox (USD)</span>
+                                            </span>
+                                            <span class="spk-sandbox-pill">Sandbox Test</span>
+                                        </div>
+                                        <div class="spk-pay-desc" id="shopPayPalDesc">Thanh toán thử nghiệm online qua PayPal Sandbox ngay sau khi giữ tồn kho.</div>
+                                        <div class="spk-usd-quote-box" id="shopUsdPreviewBox" style="display:none;">
+                                            <span style="color:var(--text-secondary);">Quy đổi PayPal:</span>
+                                            <strong class="text-mono" id="shopUsdPreviewText" style="color:var(--brand-primary);">$0.00 USD</strong>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
                         <div class="payment-summary" style="border-radius:var(--radius-md);">
                             <div class="payment-line total" style="padding-top:0;border-top:none;">
                                 <span>Tổng phải thu</span>

@@ -2047,3 +2047,154 @@ window.SpikeUI = (() => {
 
   return { openDrawer, closeDrawer, confirm: confirmAction };
 })();
+
+/* ==========================================================================
+   SPIKE PAYPAL SANDBOX SHARED CLIENT HELPER
+   ========================================================================== */
+window.SpikePayPal = (() => {
+  let _cachedConfig = null;
+  let _configPromise = null;
+
+  async function getConfig(force = false) {
+    if (_cachedConfig && !force) return _cachedConfig;
+    if (_configPromise && !force) return _configPromise;
+
+    _configPromise = (async () => {
+      try {
+        const res = await fetch('/api/payments/paypal/config', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin',
+          cache: 'no-store'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || !data.ok) {
+          return {
+            enabled: false,
+            environment: 'Sandbox',
+            currency: 'USD',
+            vndPerUsd: 0,
+            disabledReason: (data && data.error) || 'Chưa tải được cấu hình PayPal Sandbox.'
+          };
+        }
+        _cachedConfig = data;
+        return data;
+      } catch (_) {
+        return {
+          enabled: false,
+          environment: 'Sandbox',
+          currency: 'USD',
+          vndPerUsd: 0,
+          disabledReason: 'Không thể kết nối máy chủ kiểm tra PayPal Sandbox.'
+        };
+      } finally {
+        _configPromise = null;
+      }
+    })();
+
+    return _configPromise;
+  }
+
+  function convertVndToUsd(amountVnd, vndPerUsd) {
+    const vnd = Number(amountVnd) || 0;
+    const rate = Number(vndPerUsd) || 0;
+    if (vnd <= 0 || rate <= 0) return 0;
+    const rounded = Math.round((vnd / rate) * 100) / 100;
+    return rounded < 0.01 ? 0.01 : rounded;
+  }
+
+  function formatUsd(amountUsd) {
+    const num = Number(amountUsd) || 0;
+    return `$${num.toFixed(2)} USD`;
+  }
+
+  function formatExchangeNote(amountVnd, cfg) {
+    if (!cfg || !cfg.enabled || !(Number(cfg.vndPerUsd) > 0)) {
+      return cfg?.disabledReason || 'PayPal Sandbox chưa cấu hình tỷ giá.';
+    }
+    const usd = convertVndToUsd(amountVnd, cfg.vndPerUsd);
+    const rateFormatted = Number(cfg.vndPerUsd).toLocaleString('vi-VN');
+    return `${formatUsd(usd)} (1 USD = ${rateFormatted} đ)`;
+  }
+
+  function storePendingMeta(meta) {
+    try {
+      if (meta && meta.attemptCode) {
+        window.sessionStorage.setItem(`spike_pp_meta_${meta.attemptCode}`, JSON.stringify(meta));
+      }
+    } catch (_) {}
+  }
+
+  async function createAndRedirect({ targetType = 'booking', targetCode, guestAccessToken = '', idempotencyKey = '' }) {
+    const cleanTarget = String(targetCode || '').trim().toUpperCase();
+    if (!cleanTarget) {
+      return { ok: false, error: 'Thiếu mã đơn cần thanh toán PayPal.' };
+    }
+
+    const idem = idempotencyKey || ((window.crypto && window.crypto.randomUUID)
+      ? window.crypto.randomUUID()
+      : `pp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (guestAccessToken) {
+        headers['X-Booking-Access-Token'] = guestAccessToken;
+      }
+
+      const res = await apiFetch('/api/payments/paypal/create-order', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          targetType,
+          targetCode: cleanTarget,
+          guestAccessToken: guestAccessToken || null,
+          idempotencyKey: idem
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok || !data.approveUrl) {
+        return {
+          ok: false,
+          status: res.status,
+          code: data.code,
+          error: data.error || 'Không thể khởi tạo phiên thanh toán PayPal Sandbox.',
+          data
+        };
+      }
+
+      if (guestAccessToken) {
+        try {
+          window.sessionStorage.setItem(`pb_guest_token_${cleanTarget}`, guestAccessToken);
+        } catch (_) {}
+      }
+
+      storePendingMeta({
+        attemptCode: data.attemptCode,
+        targetType,
+        targetCode: cleanTarget,
+        amountVnd: data.amountVnd,
+        amountUsd: data.amountUsd,
+        vndPerUsd: data.exchangeRateVndPerUsd,
+        payPalOrderId: data.payPalOrderId
+      });
+
+      window.location.assign(data.approveUrl);
+      return { ok: true, redirecting: true, data };
+    } catch (_) {
+      return {
+        ok: false,
+        status: 0,
+        error: 'Mất kết nối mạng khi khởi tạo giao dịch PayPal Sandbox.'
+      };
+    }
+  }
+
+  return {
+    getConfig,
+    convertVndToUsd,
+    formatUsd,
+    formatExchangeNote,
+    createAndRedirect
+  };
+})();

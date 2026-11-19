@@ -369,17 +369,31 @@
                                                               : b.Status == "approved" ? "Đã duyệt"
                                                               : b.Status == "pending" ? "Chờ duyệt"
                                                               : b.Status == "rejected" ? "Đã hủy" : "Hoàn thành";
-                                            int fee = b.TotalPaid > 0 ? b.TotalPaid : b.CourtFee;
+                                            int fee = b.AmountDue > 0 ? b.AmountDue : (b.CourtFee + b.PosTotal - b.DiscountAmount);
+                                            int remainingDue = Math.Max(0, fee - b.PaidAmount);
+                                            bool canPayPayPal = remainingDue > 0 && (b.Status == "pending" || b.Status == "approved" || b.Status == "playing");
                                             <tr>
                                                 <td><span class="text-mono font-bold" style="color:var(--color-indigo);">@b.BookingCode</span></td>
                                                 <td><span class="font-semibold text-xs">@b.BookingDate</span></td>
                                                 <td><span class="badge badge-neutral">@(b.Court?.CourtName ?? $"Sân #{b.CourtId}")</span></td>
                                                 <td class="text-mono font-semibold">@b.StartTime <span class="text-xs text-muted">(@(b.Duration)p)</span></td>
                                                 <td>@b.Players người</td>
-                                                <td class="text-mono font-bold" style="color:var(--color-primary);">@fee.ToString("N0") đ</td>
+                                                <td class="text-mono font-bold" style="color:var(--color-primary);">
+                                                    <div>@fee.ToString("N0") đ</div>
+                                                    @if (remainingDue > 0)
+                                                    {
+                                                        <div class="text-xs text-muted">Còn lại: @remainingDue.ToString("N0") đ</div>
+                                                    }
+                                                </td>
                                                 <td><span class="badge @badgeCls">@statusText</span></td>
                                                 <td>
-                                                    <a href="/Lookup" class="btn btn-outline btn-xs">Xem QR</a>
+                                                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                                                        <a href="/Lookup?code=@Uri.EscapeDataString(b.BookingCode)" class="btn btn-outline btn-xs">Xem QR</a>
+                                                        @if (canPayPayPal)
+                                                        {
+                                                            <button type="button" class="btn btn-primary btn-xs" onclick="payProfileBookingPayPal('@b.BookingCode', this)">PayPal</button>
+                                                        }
+                                                    </div>
                                                 </td>
                                             </tr>
                                         }

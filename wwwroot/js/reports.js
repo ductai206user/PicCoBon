@@ -120,6 +120,7 @@ async function renderReports() {
     renderReportCourts(data.courtBreakdown || []);
     renderReportTopMembers(data.topMembers || []);
     renderReportLedgerRows(data.recentTransactions || []);
+    loadAdminPayPalTransactions();
 
     return { ok: true, status: 200, data };
   } catch (err) {
@@ -178,7 +179,7 @@ function renderReportKpis(d) {
         <div class="stat-icon" style="background:var(--color-primary-50);color:var(--color-primary)"><iconify-icon icon="lucide:trending-up"></iconify-icon></div>
       </div>
       <div class="stat-value primary text-mono">${formatMoney(d.totalCollectedRevenue)}</div>
-      <div class="stat-detail">Tiền mặt: ${formatMoney(d.cashNetCollected)} · CK: ${formatMoney(d.transferNetCollected)}</div>
+      <div class="stat-detail">Tiền mặt: ${formatMoney(d.cashNetCollected)} · CK: ${formatMoney(d.transferNetCollected)} · PayPal: ${formatMoney(d.paypalNetCollected || 0)}</div>
     </div>
     <div class="stat-widget" data-testid="report-kpi-booking-vs-shop">
       <div class="stat-widget-top">
@@ -291,7 +292,10 @@ function renderReportLedgerRows(rows) {
     const isRefund = String(r.type).toLowerCase() === 'refund' || Number(r.amount) < 0;
     const badgeCls = isRefund ? 'badge-danger' : 'badge-success';
     const typeLbl = isRefund ? 'Hoàn tiền' : 'Thu tiền';
-    const methodLbl = r.method === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt';
+    const methodKey = String(r.method || '').toLowerCase();
+    const methodLbl = methodKey === 'transfer'
+      ? 'Chuyển khoản'
+      : (methodKey === 'paypal' ? 'PayPal Sandbox' : 'Tiền mặt');
     return `
       <tr>
         <td class="text-mono text-xs">${escapeHtml(r.createdAt)}</td>
@@ -319,6 +323,167 @@ async function filterReport() {
   const res = await renderReports();
   if (res && res.ok) {
     showToast('Đã cập nhật sổ cái', 'Số liệu doanh thu thực thu, hoàn tiền và công nợ đã được tải từ máy chủ.', 'success');
+  }
+}
+
+function payPalLocalStatusBadge(status) {
+  switch (status) {
+    case 'Completed': return '<span class="badge badge-success">Hoàn tất (Completed)</span>';
+    case 'AwaitingApproval': return '<span class="badge badge-info">Chờ duyệt PayPal</span>';
+    case 'Cancelled': return '<span class="badge badge-neutral">Đã hủy</span>';
+    case 'Refunded': return '<span class="badge badge-danger">Đã hoàn tiền</span>';
+    case 'RefundedAfterExpiry': return '<span class="badge badge-danger">Hoàn do hết hạn</span>';
+    case 'AmbiguousTimeout':
+    case 'Capturing':
+    case 'CapturedCompensationPending':
+    case 'CompensationRefundRequired':
+      return `<span class="badge badge-warning">Cần đối soát (${escapeHtml(status)})</span>`;
+    default:
+      return `<span class="badge badge-neutral">${escapeHtml(status || '--')}</span>`;
+  }
+}
+
+async function loadAdminPayPalTransactions() {
+  const tbody = document.getElementById('reportPayPalTableBody');
+  const alertHost = document.getElementById('reportPayPalAlertHost');
+  const badgeEl = document.getElementById('reportPayPalReconcileBadge');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/admin/paypal/transactions?limit=40', {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      cache: 'no-store'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data || !data.ok) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:1.25rem;color:var(--text-muted);">Chưa thể tải nhật ký PayPal Sandbox.</td></tr>`;
+      return;
+    }
+
+    const rows = Array.isArray(data.transactions) ? data.transactions : [];
+    const reconcileStatuses = new Set(['AmbiguousTimeout', 'Capturing', 'CapturedCompensationPending', 'CompensationRefundRequired', 'AwaitingApproval']);
+    const urgentCount = rows.filter(x => reconcileStatuses.has(x.localStatus) && x.localStatus !== 'AwaitingApproval').length;
+
+    if (badgeEl) {
+      badgeEl.className = `badge ${urgentCount > 0 ? 'badge-warning' : 'badge-success'}`;
+      badgeEl.textContent = urgentCount > 0 ? `Cần đối soát: ${urgentCount}` : 'Đồng bộ';
+    }
+
+    if (alertHost) {
+      if (urgentCount > 0) {
+        alertHost.style.display = 'block';
+        alertHost.innerHTML = `
+          <div class="spk-pp-reconcile-banner">
+            <div>
+              <strong>Phát hiện ${urgentCount} giao dịch PayPal cần đối soát hoặc hoàn tiền bù trừ!</strong>
+              <span style="margin-left:6px;">Nhấn "Đối soát" trên dòng tương ứng để đồng bộ trạng thái với PayPal Orders API v2.</span>
+            </div>
+          </div>`;
+      } else {
+        alertHost.style.display = 'none';
+        alertHost.innerHTML = '';
+      }
+    }
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:1.25rem;color:var(--text-muted);">Chưa phát sinh giao dịch PayPal Sandbox nào.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(tx => {
+      const canReconcile = ['AwaitingApproval', 'Capturing', 'AmbiguousTimeout', 'CapturedCompensationPending', 'CompensationRefundRequired'].includes(tx.localStatus);
+      const canRefund = tx.localStatus === 'Completed' && Boolean(tx.payPalCaptureId) && !tx.payPalRefundId;
+      return `
+        <tr>
+          <td>
+            <div class="text-mono font-bold text-xs">${escapeHtml(tx.attemptCode)}</div>
+            <div class="text-xs text-muted">${escapeHtml((tx.createdAtUtc || '').slice(0, 19).replace('T', ' '))} UTC</div>
+          </td>
+          <td>
+            <span class="badge badge-neutral">${tx.targetType === 'order' ? 'Shop' : 'Đặt sân'}</span>
+            <strong class="text-mono" style="margin-left:4px;color:var(--color-indigo);">${escapeHtml(tx.targetCode)}</strong>
+          </td>
+          <td class="text-mono">
+            <strong>${formatMoney(tx.amountVnd)}</strong>
+            <div class="text-xs text-muted">$${Number(tx.amountUsd || 0).toFixed(2)} USD (@${Number(tx.exchangeRateVndPerUsd || 0).toLocaleString('vi-VN')})</div>
+          </td>
+          <td class="text-mono text-xs">
+            <div>Ord: ${escapeHtml(tx.payPalOrderId || '--')}</div>
+            ${tx.payPalCaptureId ? `<div style="color:var(--color-success);">Cap: ${escapeHtml(tx.payPalCaptureId)}</div>` : ''}
+            ${tx.payPalRefundId ? `<div style="color:var(--color-danger);">Rfd: ${escapeHtml(tx.payPalRefundId)}</div>` : ''}
+          </td>
+          <td>
+            ${payPalLocalStatusBadge(tx.localStatus)}
+            ${tx.lastErrorMessage ? `<div class="text-xs text-muted" style="max-width:220px;margin-top:3px;">${escapeHtml(tx.lastErrorMessage)}</div>` : ''}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              ${canReconcile ? `<button type="button" class="btn btn-outline btn-xs" onclick="adminReconcilePayPal('${escapeAttr(tx.attemptCode)}', this)">Đối soát</button>` : ''}
+              ${canRefund ? `<button type="button" class="btn btn-danger-outline btn-xs" onclick="adminRefundPayPal('${escapeAttr(tx.attemptCode)}', ${Number(tx.amountVnd) || 0}, this)">Hoàn tiền PayPal</button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (_) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:1.25rem;color:var(--text-muted);">Lỗi kết nối khi tải nhật ký PayPal Sandbox.</td></tr>`;
+  }
+}
+
+async function adminReconcilePayPal(attemptCode, btnEl) {
+  if (!attemptCode) return;
+  if (btnEl) btnEl.disabled = true;
+  try {
+    const res = await apiFetch(`/api/admin/paypal/${encodeURIComponent(attemptCode)}/reconcile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      showToast('Đối soát PayPal thành công', `Phiên ${attemptCode} → ${data.localStatus}`, 'success');
+    } else {
+      showToast('Kết quả đối soát', (data && data.error) || `Trạng thái: ${data?.localStatus || res.status}`, 'warning');
+    }
+    await renderReports();
+  } finally {
+    if (btnEl) btnEl.disabled = false;
+  }
+}
+
+async function adminRefundPayPal(attemptCode, amountVnd, btnEl) {
+  if (!attemptCode) return;
+  const okConfirm = await SpikeUI.confirm({
+    title: 'Xác nhận hoàn tiền PayPal Sandbox',
+    message: `Thực hiện hoàn trả ${formatMoney(amountVnd)} qua PayPal REST API cho phiên ${attemptCode} và ghi bút toán đối ứng vào sổ cái?`,
+    confirmLabel: 'Hoàn tiền PayPal ngay',
+    danger: true
+  });
+  if (!okConfirm) return;
+
+  if (btnEl) btnEl.disabled = true;
+  try {
+    const idem = (window.crypto && window.crypto.randomUUID)
+      ? window.crypto.randomUUID()
+      : `adm-rfd-${Date.now()}`;
+    const res = await apiFetch(`/api/admin/paypal/${encodeURIComponent(attemptCode)}/refund`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason: 'Admin Spike OS hoàn tiền qua PayPal Sandbox',
+        idempotencyKey: idem
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      showToast('Hoàn tiền PayPal thành công', `PayPal Refund ID: ${data.payPalRefundId}`, 'success');
+    } else {
+      showToast('Không thể hoàn tiền PayPal', (data && data.error) || `HTTP ${res.status}`, 'error');
+    }
+    await renderReports();
+  } finally {
+    if (btnEl) btnEl.disabled = false;
   }
 }
 

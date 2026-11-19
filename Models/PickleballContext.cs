@@ -56,6 +56,8 @@ public partial class PickleballContext : DbContext
 
     public virtual DbSet<TbIdempotencyRecord> TbIdempotencyRecords { get; set; }
 
+    public virtual DbSet<TbPayPalTransaction> TbPayPalTransactions { get; set; }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         SyncTypedColumns();
@@ -95,6 +97,10 @@ public partial class PickleballContext : DbContext
 
                 case TbPaymentTransaction pt:
                     pt.AmountDec = pt.Amount;
+                    break;
+
+                case TbPayPalTransaction ppt:
+                    ppt.AmountVndDec = ppt.AmountVnd;
                     break;
 
                 case TbProduct p:
@@ -458,6 +464,69 @@ public partial class PickleballContext : DbContext
             entity.Property(e => e.ResultEntityCode).HasMaxLength(60);
             entity.Property(e => e.CreatedAtUtc).HasColumnType("datetime2");
             entity.Property(e => e.ExpiresAtUtc).HasColumnType("datetime2");
+        });
+
+        modelBuilder.Entity<TbPayPalTransaction>(entity =>
+        {
+            entity.HasKey(e => e.PayPalTransactionId);
+            entity.ToTable("tb_PayPalTransaction");
+
+            entity.HasIndex(e => e.PublicAttemptCode).IsUnique();
+            entity.HasIndex(e => e.CreateIdempotencyKey).IsUnique();
+            entity.HasIndex(e => e.PayPalOrderId).IsUnique().HasFilter("[PayPalOrderId] IS NOT NULL");
+            entity.HasIndex(e => e.PayPalCaptureId).IsUnique().HasFilter("[PayPalCaptureId] IS NOT NULL");
+            entity.HasIndex(e => e.PayPalRefundId).IsUnique().HasFilter("[PayPalRefundId] IS NOT NULL");
+            entity.HasIndex(e => e.LedgerTransactionId).IsUnique().HasFilter("[LedgerTransactionId] IS NOT NULL");
+            entity.HasIndex(e => e.CompensationRefundLedgerTxId).IsUnique().HasFilter("[CompensationRefundLedgerTxId] IS NOT NULL");
+            entity.HasIndex(e => new { e.TargetType, e.TargetCode, e.LocalStatus, e.ExpiresAtUtc });
+            entity.HasIndex(e => new { e.LocalStatus, e.UpdatedAtUtc });
+
+            entity.Property(e => e.PublicAttemptCode).HasMaxLength(30);
+            entity.Property(e => e.TargetType).HasMaxLength(20);
+            entity.Property(e => e.TargetCode).HasMaxLength(40);
+            entity.Property(e => e.PayPalOrderId).HasMaxLength(64);
+            entity.Property(e => e.PayPalCaptureId).HasMaxLength(64);
+            entity.Property(e => e.PayPalRefundId).HasMaxLength(64);
+            entity.Property(e => e.PayPalPayerId).HasMaxLength(64);
+            entity.Property(e => e.PayPalPayerEmail).HasMaxLength(150);
+            entity.Property(e => e.PayPalStatus).HasMaxLength(32);
+            entity.Property(e => e.LocalStatus).HasMaxLength(40).HasDefaultValue("Creating");
+            entity.Property(e => e.AmountVndDec).HasColumnType("decimal(18, 2)").HasDefaultValue(0m);
+            entity.Property(e => e.ExchangeRateVndPerUsd).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.AmountUsd).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.CurrencyCode).HasMaxLength(10).HasDefaultValue("USD");
+            entity.Property(e => e.RateSnapshotUtc).HasColumnType("datetime2");
+            entity.Property(e => e.CreateIdempotencyKey).HasMaxLength(100);
+            entity.Property(e => e.CaptureIdempotencyKey).HasMaxLength(100);
+            entity.Property(e => e.RefundIdempotencyKey).HasMaxLength(100);
+            entity.Property(e => e.ReturnNonce).HasMaxLength(64);
+            entity.Property(e => e.ApprovalUrl).HasMaxLength(500);
+            entity.Property(e => e.CreatedBy).HasMaxLength(100);
+            entity.Property(e => e.ClientIpHash).HasMaxLength(64);
+            entity.Property(e => e.CreatedAtUtc).HasColumnType("datetime2");
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("datetime2");
+            entity.Property(e => e.CapturedAtUtc).HasColumnType("datetime2");
+            entity.Property(e => e.RefundedAtUtc).HasColumnType("datetime2");
+            entity.Property(e => e.ExpiresAtUtc).HasColumnType("datetime2");
+            entity.Property(e => e.LastErrorCode).HasMaxLength(60);
+            entity.Property(e => e.LastErrorMessage).HasMaxLength(300);
+            entity.Property(e => e.RowVersion).IsRowVersion().IsRequired(false);
+
+            entity.HasOne(d => d.Booking).WithMany()
+                .HasForeignKey(d => d.BookingId)
+                .HasConstraintName("FK_tb_PayPalTransaction_tb_Booking");
+
+            entity.HasOne(d => d.Order).WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("FK_tb_PayPalTransaction_tb_Order");
+
+            entity.HasOne(d => d.LedgerTransaction).WithMany()
+                .HasForeignKey(d => d.LedgerTransactionId)
+                .HasConstraintName("FK_tb_PayPalTransaction_tb_PaymentTransaction");
+
+            entity.HasOne(d => d.CompensationRefundLedgerTx).WithMany()
+                .HasForeignKey(d => d.CompensationRefundLedgerTxId)
+                .HasConstraintName("FK_tb_PayPalTransaction_RefundLedger");
         });
 
         OnModelCreatingPartial(modelBuilder);

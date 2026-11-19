@@ -947,10 +947,13 @@ async function loadLedgerTransactions(kind, code) {
       const isRefund = String(t.transactionType || t.type).toLowerCase() === 'refund' || Number(t.amount) < 0;
       const sign = isRefund ? '−' : '+';
       const color = isRefund ? 'var(--color-danger)' : 'var(--color-success)';
+      const methodLabel = String(t.paymentMethod || '').toLowerCase() === 'transfer'
+        ? 'Chuyển khoản'
+        : (String(t.paymentMethod || '').toLowerCase() === 'paypal' ? 'PayPal Sandbox' : 'Tiền mặt');
       return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:0.45rem 0.65rem;border-bottom:1px solid var(--border-light);font-size:0.76rem;">
           <div>
-            <strong style="color:${color}">${isRefund ? 'Hoàn tiền' : 'Thu tiền'} (${escapeHtml(t.paymentMethod)})</strong>
+            <strong style="color:${color}">${isRefund ? 'Hoàn tiền' : 'Thu tiền'} (${escapeHtml(methodLabel)})</strong>
             ${t.referenceCode ? ` · <span class="text-mono">Ref: ${escapeHtml(t.referenceCode)}</span>` : ''}
             <div class="text-muted">${escapeHtml(t.createdAt || '')} · bởi ${escapeHtml(t.recordedBy || 'Staff')}</div>
           </div>

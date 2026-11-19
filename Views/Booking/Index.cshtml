@@ -167,9 +167,42 @@
                             </div>
                         </div>
 
-                        <div class="sn-alert sn-alert-info" style="font-size:0.78rem;padding:10px 12px;margin-bottom:14px;">
-                            <iconify-icon icon="lucide:shield-check" width="16" style="flex-shrink:0;margin-top:2px;"></iconify-icon>
-                            <span>Miễn phí giữ chỗ theo phiên; thanh toán trực tiếp tại quầy khi nhận sân qua QR.</span>
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <span class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
+                                <span>Phương thức thanh toán</span>
+                                <span class="spk-sandbox-pill" id="bookingPayPalBadge" style="display:none;">SANDBOX TEST</span>
+                            </span>
+                            <div class="spk-payment-methods" role="radiogroup" aria-label="Phương thức thanh toán đặt sân">
+                                <label class="spk-pay-option is-selected" id="optPayCashLabel" for="payMethodCash">
+                                    <input class="spk-pay-radio" type="radio" name="bookingPaymentMethod" id="payMethodCash" value="cash" checked onchange="selectBookingPaymentMethod('cash')">
+                                    <div class="spk-pay-body">
+                                        <div class="spk-pay-title-row">
+                                            <span class="spk-pay-title">
+                                                <iconify-icon icon="lucide:banknote" width="15" style="color:var(--brand-primary);"></iconify-icon>
+                                                <span>Thanh toán tại quầy CLB</span>
+                                            </span>
+                                        </div>
+                                        <div class="spk-pay-desc">Miễn phí giữ chỗ theo phiên; trả tiền mặt hoặc chuyển khoản khi nhận sân qua QR.</div>
+                                    </div>
+                                </label>
+                                <label class="spk-pay-option" id="optPayPayPalLabel" for="payMethodPayPal">
+                                    <input class="spk-pay-radio" type="radio" name="bookingPaymentMethod" id="payMethodPayPal" value="paypal" onchange="selectBookingPaymentMethod('paypal')">
+                                    <div class="spk-pay-body">
+                                        <div class="spk-pay-title-row">
+                                            <span class="spk-pay-title">
+                                                <iconify-icon icon="lucide:globe" width="15" style="color:var(--brand-primary);"></iconify-icon>
+                                                <span>PayPal Sandbox (USD)</span>
+                                            </span>
+                                            <span class="spk-sandbox-pill">Sandbox Test</span>
+                                        </div>
+                                        <div class="spk-pay-desc" id="bookingPayPalDesc">Thanh toán thử nghiệm qua cổng PayPal Sandbox chính thức (quy đổi USD).</div>
+                                        <div class="spk-usd-quote-box" id="bookingUsdPreviewBox" style="display:none;">
+                                            <span style="color:var(--text-secondary);">Quy đổi PayPal:</span>
+                                            <strong class="text-mono" id="bookingUsdPreviewText" style="color:var(--brand-primary);">$0.00 USD</strong>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
                         </div>
 
                         <div class="payment-summary" style="border-radius:var(--radius-md);">

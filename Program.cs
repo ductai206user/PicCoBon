@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PickleballClub.Configuration;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
@@ -30,6 +31,9 @@ builder.Services.AddControllersWithViews(options =>
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddDataProtection();
+builder.Services.AddMemoryCache();
+
+builder.Services.Configure<PayPalOptions>(builder.Configuration.GetSection(PayPalOptions.SectionName));
 
 // P1-17: Consistent Anti-Forgery protection across forms and JSON API endpoints (RequestVerificationToken header)
 builder.Services.AddAntiforgery(options =>
@@ -52,10 +56,16 @@ builder.Services.AddScoped<PricingService>();
 builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<ProductImageService>();
+builder.Services.AddHttpClient<IPayPalClient, PayPalClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(25);
+});
+builder.Services.AddScoped<PayPalPaymentService>();
 
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true) && !builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddHostedService<BookingLifecycleWorker>();
+    builder.Services.AddHostedService<PayPalReconciliationWorker>();
 }
 
 // P0-01 & P0-02: Signed Cookie Authentication with HTTPS SecurePolicy=Always in Production & live revocation check
@@ -175,6 +185,7 @@ builder.Services.AddRateLimiter(options =>
             var p when p.Contains("/reset-password") || p.Contains("/change-password") => "auth.password",
             var p when p.Contains("/lookup/") => "ticket.lookup",
             var p when p.Contains("/api/bookings") => "booking.create",
+            var p when p.Contains("/api/payments/paypal") => "paypal.checkout",
             var p when p.Contains("/api/checkin") => "checkin.scan",
             _ => "general"
         };
@@ -218,6 +229,19 @@ builder.Services.AddRateLimiter(options =>
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = bookingPermitLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
+    options.AddPolicy("PayPalLimiter", httpContext =>
+    {
+        string key = ResolveTrustedClientPartition(httpContext, isDevOrTesting);
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = builder.Configuration.GetValue("RateLimiting:PayPalPermitLimit", 30),
             Window = TimeSpan.FromMinutes(1),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             QueueLimit = 0,

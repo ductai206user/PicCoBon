@@ -50,6 +50,39 @@
         </div>
       </div>
 
+      <!-- PayPal Sandbox Đối Soát & Giao Dịch -->
+      <div class="card card--flush" id="reportPayPalCard">
+        <div class="card-header" style="justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <span class="card-header-title">
+            <iconify-icon icon="lucide:globe" width="18" style="color:var(--color-primary)"></iconify-icon>
+            <span>PayPal Sandbox — Theo Dõi &amp; Đối Soát Giao Dịch</span>
+          </span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="spk-sandbox-pill">Sandbox API v2</span>
+            <span class="badge badge-success" id="reportPayPalReconcileBadge">Đồng bộ</span>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="loadAdminPayPalTransactions()">Làm mới</button>
+          </div>
+        </div>
+        <div id="reportPayPalAlertHost" style="display:none;padding:12px 18px 0;"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã phiên</th>
+                <th>Đơn / Vé</th>
+                <th>Giá trị VNĐ / USD</th>
+                <th>PayPal IDs (Order / Capture)</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="reportPayPalTableBody">
+              <tr><td colspan="6" style="text-align:center;padding:1.25rem;color:var(--text-muted);">Đang tải nhật ký PayPal Sandbox...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Nhật ký giao dịch sổ cái -->
       <div class="card card--flush">
         <div class="card-header">

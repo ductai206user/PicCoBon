@@ -304,7 +304,19 @@ public class BookingService
             return BookingOperationResult.Fail(
                 "Thanh toán trực tuyến chưa được kích hoạt tài khoản Merchant. Vui lòng chọn Thanh toán tại quầy.", 422);
         }
-        string paymentMethod = requestedMethod == "transfer" ? "transfer" : "cash";
+        string paymentMethod = requestedMethod switch
+        {
+            "transfer" => "transfer",
+            "paypal" => "paypal",
+            _ => "cash"
+        };
+
+        if (paymentMethod == "paypal" && input.AutoApproveWalkIn)
+        {
+            return BookingOperationResult.Fail(
+                "Đặt sân thanh toán PayPal phải khởi tạo ở trạng thái chờ thanh toán (pending), không hỗ trợ tự động duyệt walk-in.",
+                422);
+        }
 
         string idemScope = "booking.create";
         string idemActor = IdempotencyService.BuildActorKey(input.AccountId, cleanPhone);
@@ -1701,7 +1713,7 @@ WHERE ProductId = {0}",
         }
         if (cleanMethod != "cash" && cleanMethod != "transfer")
         {
-            return BookingOperationResult.Fail("Phương thức thanh toán không hợp lệ (chỉ hỗ trợ 'cash' hoặc 'transfer').", 400);
+            return BookingOperationResult.Fail("Phương thức thanh toán không hợp lệ (chỉ hỗ trợ 'cash' hoặc 'transfer'; thanh toán PayPal phải đi qua luồng PayPal Checkout đã xác thực).", 400);
         }
 
         string? cleanRef = string.IsNullOrWhiteSpace(referenceCode)
@@ -1885,7 +1897,14 @@ WHERE ProductId = {0}",
             return BookingOperationResult.Fail("Thiếu khóa IdempotencyKey cho giao dịch hoàn tiền.", 400);
         }
 
-        string cleanMethod = (paymentMethod ?? "cash").Trim().ToLowerInvariant() == "transfer" ? "transfer" : "cash";
+        string rawRefundMethod = (paymentMethod ?? "cash").Trim().ToLowerInvariant();
+        if (rawRefundMethod == "paypal")
+        {
+            return BookingOperationResult.Fail(
+                "Hoàn tiền PayPal phải thực hiện qua API hoàn tiền PayPal Checkout để đảm bảo đối soát thực tế trên Sandbox.",
+                400);
+        }
+        string cleanMethod = rawRefundMethod == "transfer" ? "transfer" : "cash";
 
         bool isRelational = context.Database.IsRelational();
         await using var tx = isRelational ? await context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
@@ -1983,6 +2002,144 @@ WHERE ProductId = {0}",
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
         return BookingOperationResult.Ok(booking, tx: refundRow);
+    }
+
+    /// <summary>
+    /// Posts a verified PayPal capture receipt into TbPaymentTransaction within an already-open caller transaction.
+    /// Does NOT change booking.Status (hold/approval lifecycle stays strictly separate from payment ledger).
+    /// </summary>
+    public static async Task<TbPaymentTransaction> PostPayPalLedgerInCurrentTxAsync(
+        PickleballContext context,
+        TbBooking booking,
+        int amountVnd,
+        string payPalCaptureId,
+        string payPalOrderId,
+        string? note,
+        int? actorAccountId,
+        string? actorUsername,
+        string? ipAddress,
+        DateTime vnNow)
+    {
+        string idemKey = $"PP-CAP:{payPalCaptureId}";
+        var existing = await context.TbPaymentTransactions
+            .FirstOrDefaultAsync(t => t.IdempotencyKey == idemKey || t.ReferenceCode == payPalCaptureId);
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        int amountDue = booking.AmountDue > 0
+            ? booking.AmountDue
+            : Math.Max(0, booking.CourtFee - booking.DiscountAmount + booking.PosTotal);
+        booking.AmountDue = amountDue;
+
+        var paymentRow = new TbPaymentTransaction
+        {
+            BookingId = booking.BookingId,
+            BookingCode = booking.BookingCode,
+            Amount = amountVnd,
+            Currency = "VND",
+            TransactionType = "payment",
+            PaymentMethod = "paypal",
+            Status = "completed",
+            IdempotencyKey = idemKey,
+            ReferenceCode = payPalCaptureId,
+            Note = string.IsNullOrWhiteSpace(note)
+                ? $"PayPal Sandbox Capture {payPalCaptureId} (Order {payPalOrderId})"
+                : note.Trim()[..Math.Min(note.Trim().Length, 300)],
+            ActorAccountId = actorAccountId,
+            RecordedBy = string.IsNullOrWhiteSpace(actorUsername) ? "paypal_sandbox" : actorUsername,
+            CreatedAt = vnNow
+        };
+
+        context.TbPaymentTransactions.Add(paymentRow);
+        await context.SaveChangesAsync();
+
+        int updatedNetPaid = await ComputeBookingLedgerNetPaidAsync(context, booking.BookingId);
+        booking.PaidAmount = updatedNetPaid;
+        booking.TotalPaid = updatedNetPaid;
+        booking.PaymentMethod = "paypal";
+        booking.PaymentStatus = ComputePaymentStatus(updatedNetPaid, amountDue);
+
+        context.TbAuditLogs.Add(new TbAuditLog
+        {
+            Action = "PAYPAL_BOOKING_PAYMENT_RECORDED",
+            EntityType = "Booking",
+            EntityId = booking.BookingCode,
+            ActorAccountId = actorAccountId,
+            ActorUsername = string.IsNullOrWhiteSpace(actorUsername) ? "paypal_sandbox" : actorUsername,
+            Details = $"Amount={amountVnd}, CaptureId={payPalCaptureId}, PayPalOrderId={payPalOrderId}, NetPaid={updatedNetPaid}/{amountDue}",
+            IpAddress = ipAddress,
+            CreatedAt = vnNow
+        });
+
+        await context.SaveChangesAsync();
+        return paymentRow;
+    }
+
+    /// <summary>
+    /// Posts a verified PayPal refund counter-entry into TbPaymentTransaction within an already-open caller transaction.
+    /// </summary>
+    public static async Task<TbPaymentTransaction> PostPayPalRefundLedgerInCurrentTxAsync(
+        PickleballContext context,
+        TbBooking booking,
+        int refundAmountVnd,
+        string payPalRefundId,
+        string? note,
+        int? actorAccountId,
+        string? actorUsername,
+        string? ipAddress,
+        DateTime vnNow)
+    {
+        string idemKey = $"PP-RFD:{payPalRefundId}";
+        var existing = await context.TbPaymentTransactions
+            .FirstOrDefaultAsync(t => t.IdempotencyKey == idemKey);
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        var refundRow = new TbPaymentTransaction
+        {
+            BookingId = booking.BookingId,
+            BookingCode = booking.BookingCode,
+            Amount = refundAmountVnd,
+            Currency = "VND",
+            TransactionType = "refund",
+            PaymentMethod = "paypal",
+            Status = "completed",
+            IdempotencyKey = idemKey,
+            ReferenceCode = payPalRefundId,
+            Note = string.IsNullOrWhiteSpace(note)
+                ? $"PayPal Sandbox Refund {payPalRefundId}"
+                : note.Trim()[..Math.Min(note.Trim().Length, 300)],
+            ActorAccountId = actorAccountId,
+            RecordedBy = string.IsNullOrWhiteSpace(actorUsername) ? "paypal_sandbox" : actorUsername,
+            CreatedAt = vnNow
+        };
+
+        context.TbPaymentTransactions.Add(refundRow);
+        await context.SaveChangesAsync();
+
+        int updatedNetPaid = await ComputeBookingLedgerNetPaidAsync(context, booking.BookingId);
+        booking.PaidAmount = updatedNetPaid;
+        booking.TotalPaid = updatedNetPaid;
+        booking.PaymentStatus = updatedNetPaid == 0 ? "refunded" : ComputePaymentStatus(updatedNetPaid, booking.AmountDue);
+
+        context.TbAuditLogs.Add(new TbAuditLog
+        {
+            Action = "PAYPAL_BOOKING_PAYMENT_REFUNDED",
+            EntityType = "Booking",
+            EntityId = booking.BookingCode,
+            ActorAccountId = actorAccountId,
+            ActorUsername = string.IsNullOrWhiteSpace(actorUsername) ? "paypal_sandbox" : actorUsername,
+            Details = $"RefundAmount={refundAmountVnd}, PayPalRefundId={payPalRefundId}, NetPaidAfter={updatedNetPaid}",
+            IpAddress = ipAddress,
+            CreatedAt = vnNow
+        });
+
+        await context.SaveChangesAsync();
+        return refundRow;
     }
 
     public static async Task<int> ComputeBookingLedgerNetPaidAsync(PickleballContext context, int bookingId)

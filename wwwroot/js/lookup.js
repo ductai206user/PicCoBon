@@ -165,6 +165,8 @@ function renderLookupTable(list, titleText) {
     const paid = Number(b.paidAmount) || 0;
     const canCancel = b.status === 'pending' || b.status === 'approved';
     const showQr = !['rejected', 'cancelled', 'expired', 'no_show'].includes(b.status);
+    const remainingDue = Math.max(0, total - paid);
+    const canPayPayPal = remainingDue > 0 && ['pending', 'approved', 'playing'].includes(b.status);
 
     return `
       <tr>
@@ -187,6 +189,7 @@ function renderLookupTable(list, titleText) {
         <td>
           <div style="display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap;">
             ${showQr ? `<button type="button" class="btn btn-outline btn-sm" onclick="viewTicketQR('${escapeAttr(b.id)}')"><iconify-icon icon="lucide:qr-code" width="14"></iconify-icon> Vé QR</button>` : ''}
+            ${canPayPayPal ? `<button type="button" class="btn btn-primary btn-sm" onclick="payBookingRemainingWithPayPal('${escapeAttr(b.id)}', this)"><iconify-icon icon="lucide:globe" width="14"></iconify-icon> PayPal Sandbox</button>` : ''}
             ${canCancel ? `<button type="button" class="btn btn-danger-outline btn-sm" onclick="cancelMyBooking('${escapeAttr(b.id)}')">Hủy đơn</button>` : ''}
           </div>
         </td>
@@ -230,6 +233,28 @@ function viewTicketQR(id) {
   document.getElementById('ticketQrTime').textContent = `${b.time} → ${endTime} (${b.duration} phút)`;
   document.getElementById('ticketQrTotal').textContent = `${formatMoney(total)} (${paid >= total && total > 0 ? 'Đã thu đủ' : `Đã thu ${formatMoney(paid)}`})`;
   openModal('modalTicketQR');
+}
+
+async function payBookingRemainingWithPayPal(id, btnEl) {
+  if (!window.SpikePayPal || !id) return;
+  const tok = activeLookupAccessToken
+    || (document.getElementById('lookupAccessToken')?.value || '').trim()
+    || resolveStoredGuestToken(id)
+    || '';
+
+  if (btnEl) btnEl.disabled = true;
+  try {
+    const res = await SpikePayPal.createAndRedirect({
+      targetType: 'booking',
+      targetCode: id,
+      guestAccessToken: tok
+    });
+    if (!res || !res.redirecting) {
+      showToast('Không thể thanh toán PayPal', (res && res.error) || 'Vui lòng kiểm tra lại điều kiện thanh toán hoặc thử lại sau.', 'error');
+    }
+  } finally {
+    if (btnEl) btnEl.disabled = false;
+  }
 }
 
 async function cancelMyBooking(id) {

@@ -19,6 +19,73 @@ let quoteRequestCounter = 0;
 let initialUrlParamsApplied = false;
 let requestedInvalidCourtId = null;
 let pendingDeepLinkTime = '';
+let selectedBookingPaymentMethod = 'cash';
+let bookingPayPalConfig = { enabled: false, vndPerUsd: 0 };
+
+async function initBookingPayPalOption() {
+  if (!window.SpikePayPal) return;
+  const cfg = await SpikePayPal.getConfig();
+  bookingPayPalConfig = cfg || { enabled: false, vndPerUsd: 0 };
+
+  const ppRadio = document.getElementById('payMethodPayPal');
+  const ppLabel = document.getElementById('optPayPayPalLabel');
+  const ppDesc = document.getElementById('bookingPayPalDesc');
+  const badge = document.getElementById('bookingPayPalBadge');
+  if (!ppRadio || !ppLabel) return;
+
+  if (cfg && cfg.enabled) {
+    ppRadio.disabled = false;
+    ppLabel.classList.remove('is-disabled');
+    if (badge) badge.style.display = 'inline-flex';
+    if (ppDesc) {
+      ppDesc.textContent = `Cổng thử nghiệm PayPal Sandbox · Tỷ giá cấu hình: 1 USD = ${Number(cfg.vndPerUsd).toLocaleString('vi-VN')} đ.`;
+    }
+  } else {
+    ppRadio.disabled = true;
+    ppLabel.classList.add('is-disabled');
+    if (selectedBookingPaymentMethod === 'paypal') {
+      selectBookingPaymentMethod('cash');
+    }
+    if (ppDesc) {
+      ppDesc.textContent = cfg?.disabledReason || 'PayPal Sandbox chưa cấu hình đầy đủ thông số.';
+    }
+  }
+  updateBookingPayPalPreview();
+}
+
+function selectBookingPaymentMethod(method) {
+  const clean = String(method || 'cash').toLowerCase() === 'paypal' ? 'paypal' : 'cash';
+  if (clean === 'paypal' && (!bookingPayPalConfig || !bookingPayPalConfig.enabled)) {
+    const cashEl = document.getElementById('payMethodCash');
+    if (cashEl) cashEl.checked = true;
+    selectedBookingPaymentMethod = 'cash';
+    showToast('PayPal Sandbox chưa sẵn sàng', bookingPayPalConfig?.disabledReason || 'Vui lòng kiểm tra cấu hình PayPal Sandbox.', 'warning');
+    return;
+  }
+
+  selectedBookingPaymentMethod = clean;
+  document.getElementById('optPayCashLabel')?.classList.toggle('is-selected', clean === 'cash');
+  document.getElementById('optPayPayPalLabel')?.classList.toggle('is-selected', clean === 'paypal');
+  updateBookingPayPalPreview();
+  syncSubmitButtonState();
+}
+
+function updateBookingPayPalPreview() {
+  const box = document.getElementById('bookingUsdPreviewBox');
+  const textEl = document.getElementById('bookingUsdPreviewText');
+  if (!box || !textEl) return;
+
+  const grandTotal = latestServerQuote && latestServerQuote.amountDue !== undefined
+    ? Number(latestServerQuote.amountDue) || 0
+    : 0;
+
+  if (bookingPayPalConfig && bookingPayPalConfig.enabled && grandTotal > 0 && window.SpikePayPal) {
+    box.style.display = 'flex';
+    textEl.textContent = SpikePayPal.formatExchangeNote(grandTotal, bookingPayPalConfig);
+  } else {
+    box.style.display = 'none';
+  }
+}
 
 function getBookingMaxHorizonDays() {
   return IS_STAFF_OR_ADMIN ? 60 : 30;
@@ -264,6 +331,7 @@ function resolveCourtSelectionAfterSync() {
 
 function initBookingPage() {
   applyUrlParamsOnce();
+  initBookingPayPalOption();
 
   const user = getCurrentUser();
   if (user) {
@@ -854,7 +922,9 @@ function syncSubmitButtonState() {
   }
 
   btn.disabled = false;
-  labelSpan.textContent = 'Xác nhận đặt sân & Nhận mã QR';
+  labelSpan.textContent = selectedBookingPaymentMethod === 'paypal'
+    ? 'Đặt sân & Thanh toán PayPal Sandbox'
+    : 'Xác nhận đặt sân & Nhận mã QR';
 }
 
 function retryServerQuote() {
@@ -886,6 +956,7 @@ async function fetchServerQuote(reqId) {
   quoteAbortController = controller;
   quoteStatus = 'loading';
   updateQuoteBadgeDom();
+  updateBookingPayPalPreview();
   syncSubmitButtonState();
 
   try {
@@ -1059,6 +1130,7 @@ function applyQuoteToDom(quote) {
   }
 
   updateQuoteBadgeDom();
+  updateBookingPayPalPreview();
   syncSubmitButtonState();
 
   const mobDt = document.getElementById('mobileBookingDateTime');
@@ -1203,7 +1275,7 @@ async function submitBooking() {
         duration: selectedDuration,
         players,
         skillLevel,
-        paymentMethod: 'cash',
+        paymentMethod: selectedBookingPaymentMethod,
         pricingVersion,
         expectedAmountDue,
         idempotencyKey
@@ -1242,6 +1314,19 @@ async function submitBooking() {
       try {
         window.sessionStorage.setItem(`pb_guest_token_${createdBooking.id}`, guestAccessToken);
       } catch (_) {}
+    }
+
+    if (selectedBookingPaymentMethod === 'paypal' && window.SpikePayPal) {
+      showToast('Đang chuyển hướng PayPal Sandbox...', `Đang tạo đơn PayPal cho mã ${createdBooking.id}...`, 'info');
+      const ppRes = await SpikePayPal.createAndRedirect({
+        targetType: 'booking',
+        targetCode: createdBooking.id,
+        guestAccessToken: guestAccessToken || ''
+      });
+      if (ppRes && ppRes.redirecting) {
+        return;
+      }
+      showToast('Không thể chuyển hướng PayPal Sandbox', ppRes?.error || 'Đơn giữ sân đã được tạo; bạn có thể thanh toán lại tại trang Tra cứu.', 'warning');
     }
 
     await syncDatabaseFromServer(true);

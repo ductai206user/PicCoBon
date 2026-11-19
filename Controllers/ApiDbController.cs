@@ -17,6 +17,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using PickleballClub.Configuration;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
@@ -26,7 +28,7 @@ namespace PickleballClub.Controllers;
 [ApiController]
 public class ApiDbController : ControllerBase
 {
-    private const string GuestRecoveryCookieName = "spike_guest_bk";
+    private const string GuestRecoveryCookieName = GuestRecoveryCookieHelper.CookieName;
 
     private readonly PickleballContext _context;
     private readonly BookingService _bookingService;
@@ -91,74 +93,14 @@ public class ApiDbController : ControllerBase
         });
     }
 
-    private sealed class GuestBookingRecoveryEntry
-    {
-        public string BookingCode { get; set; } = string.Empty;
-        public string GuestAccessToken { get; set; } = string.Empty;
-        public string? IdempotencyKey { get; set; }
-        public DateTime ExpiresAtUtc { get; set; }
-    }
-
     private void SaveGuestBookingRecoveryProof(string bookingCode, string rawGuestToken, string? idempotencyKey)
     {
-        if (string.IsNullOrWhiteSpace(bookingCode) || string.IsNullOrWhiteSpace(rawGuestToken))
-            return;
-
-        try
-        {
-            var entries = ReadGuestBookingRecoveryEntries();
-            entries.RemoveAll(e =>
-                e.ExpiresAtUtc <= DateTime.UtcNow ||
-                string.Equals(e.BookingCode, bookingCode, StringComparison.OrdinalIgnoreCase));
-
-            entries.Insert(0, new GuestBookingRecoveryEntry
-            {
-                BookingCode = bookingCode.Trim().ToUpperInvariant(),
-                GuestAccessToken = rawGuestToken,
-                IdempotencyKey = IdempotencyService.NormalizeKey(idempotencyKey),
-                ExpiresAtUtc = DateTime.UtcNow.AddHours(2)
-            });
-
-            if (entries.Count > 5)
-            {
-                entries.RemoveRange(5, entries.Count - 5);
-            }
-
-            string json = JsonSerializer.Serialize(entries);
-            string protectedPayload = _guestBookingProtector.Protect(json);
-
-            Response.Cookies.Append(GuestRecoveryCookieName, protectedPayload, new CookieOptions
-            {
-                HttpOnly = true,
-                SameSite = SameSiteMode.Lax,
-                Secure = Request.IsHttps,
-                Expires = DateTimeOffset.UtcNow.AddHours(2),
-                IsEssential = true
-            });
-        }
-        catch
-        {
-            // Ignore non-fatal cookie serialization error
-        }
+        GuestRecoveryCookieHelper.SaveProof(Request, Response, _guestBookingProtector, bookingCode, rawGuestToken, idempotencyKey);
     }
 
-    private List<GuestBookingRecoveryEntry> ReadGuestBookingRecoveryEntries()
+    private List<GuestRecoveryEntry> ReadGuestBookingRecoveryEntries()
     {
-        try
-        {
-            if (!Request.Cookies.TryGetValue(GuestRecoveryCookieName, out var rawCookie) ||
-                string.IsNullOrWhiteSpace(rawCookie))
-            {
-                return new List<GuestBookingRecoveryEntry>();
-            }
-
-            string json = _guestBookingProtector.Unprotect(rawCookie);
-            return JsonSerializer.Deserialize<List<GuestBookingRecoveryEntry>>(json) ?? new List<GuestBookingRecoveryEntry>();
-        }
-        catch
-        {
-            return new List<GuestBookingRecoveryEntry>();
-        }
+        return GuestRecoveryCookieHelper.ReadEntries(Request, _guestBookingProtector);
     }
 
     private string? TryRecoverGuestBookingToken(TbBooking booking, string? idempotencyKey)
@@ -178,7 +120,14 @@ public class ApiDbController : ControllerBase
         return null;
     }
 
-    private object MapOwnerOrStaffBookingDto(TbBooking b, string? accessTokenForUrl = null, bool embedQrSvg = false)
+    private object MapOwnerOrStaffBookingDto(TbBooking b, string? accessTokenForUrl = null, bool embedQrSvg = false) =>
+        BuildOwnerOrStaffBookingDto(b, _qrTokenService, accessTokenForUrl, embedQrSvg);
+
+    public static object BuildOwnerOrStaffBookingDto(
+        TbBooking b,
+        QrTokenService qrTokenService,
+        string? accessTokenForUrl = null,
+        bool embedQrSvg = false)
     {
         var utcNow = DateTime.UtcNow;
         var posItemsObj = BookingService.ParsePosItems(b.PosItemsJson)
@@ -225,7 +174,7 @@ public class ApiDbController : ControllerBase
 
         string qrToken = !string.IsNullOrWhiteSpace(b.CheckInToken)
             ? b.CheckInToken
-            : _qrTokenService.GenerateCheckInToken(b.BookingCode, b.BookingDate, DateTime.UtcNow.AddDays(30));
+            : qrTokenService.GenerateCheckInToken(b.BookingCode, b.BookingDate, DateTime.UtcNow.AddDays(30));
 
         string tokenQuery = !string.IsNullOrWhiteSpace(accessTokenForUrl)
             ? $"?accessToken={Uri.EscapeDataString(accessTokenForUrl)}"
@@ -265,7 +214,7 @@ public class ApiDbController : ControllerBase
             checkInToken = qrToken,
             qrSvgUrl,
             qrPngUrl,
-            qrSvg = embedQrSvg ? _qrTokenService.GenerateQrSvg(qrToken, 6) : null,
+            qrSvg = embedQrSvg ? qrTokenService.GenerateQrSvg(qrToken, 6) : null,
             checkedInAt = b.CheckedInAt?.ToString("yyyy-MM-dd HH:mm:ss"),
             completedAt = b.CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss"),
             cancelledAt = b.CancelledAt?.ToString("yyyy-MM-dd HH:mm:ss"),
@@ -623,7 +572,9 @@ public class ApiDbController : ControllerBase
         });
     }
 
-    private static object MapOrderDto(TbOrder o)
+    private static object MapOrderDto(TbOrder o) => BuildOrderDto(o);
+
+    public static object BuildOrderDto(TbOrder o)
     {
         int total = o.TotalAmount ?? 0;
         int paid = o.PaidAmount;
@@ -890,7 +841,9 @@ public class ApiDbController : ControllerBase
     [ValidateAntiForgeryToken]
     [EnableRateLimiting("BookingCreateLimiter")]
     [HttpPost("/api/bookings")]
-    public async Task<IActionResult> CreateBooking([FromBody] JsonElement payload)
+    public async Task<IActionResult> CreateBooking(
+        [FromBody] JsonElement payload,
+        [FromServices] IOptionsMonitor<PayPalOptions> payPalOptions)
     {
         int courtId = payload.TryGetProperty("courtId", out var cEl) && cEl.TryGetInt32(out int cid) ? cid : 0;
         string customerName = payload.TryGetProperty("customerName", out var cnEl)
@@ -914,6 +867,19 @@ public class ApiDbController : ControllerBase
         int players = payload.TryGetProperty("players", out var plEl) && plEl.TryGetInt32(out int pl) ? pl : 4;
         string? skillLevel = payload.TryGetProperty("skillLevel", out var skEl) ? skEl.GetString() : null;
         string? paymentMethod = payload.TryGetProperty("paymentMethod", out var pmEl) ? pmEl.GetString() : "cash";
+        if (string.Equals((paymentMethod ?? string.Empty).Trim(), "paypal", StringComparison.OrdinalIgnoreCase))
+        {
+            var cfg = payPalOptions.CurrentValue.ValidateForCheckout();
+            if (!cfg.IsValid)
+            {
+                return StatusCode(503, new
+                {
+                    ok = false,
+                    code = cfg.ErrorCode,
+                    error = cfg.ErrorMessage
+                });
+            }
+        }
         string? idempotencyKey = payload.TryGetProperty("idempotencyKey", out var ikEl) ? ikEl.GetString() : null;
         string? expectedPricingVersion = payload.TryGetProperty("pricingVersion", out var pvEl) ? pvEl.GetString() : null;
         int? expectedAmountDue = payload.TryGetProperty("expectedAmountDue", out var eaEl) && eaEl.TryGetInt32(out int ea) ? ea : null;
@@ -1969,7 +1935,10 @@ public class ApiDbController : ControllerBase
 
     [ValidateAntiForgeryToken]
     [HttpPost("/api/orders/create")]
-    public async Task<IActionResult> CreateOrderApi([FromBody] JsonElement payload)
+    public async Task<IActionResult> CreateOrderApi(
+        [FromBody] JsonElement payload,
+        [FromServices] IOptionsMonitor<PayPalOptions> payPalOptions,
+        [FromServices] PayPalPaymentService payPalPaymentService)
     {
         string customerName = payload.TryGetProperty("customerName", out var nProp) ? (nProp.GetString() ?? string.Empty) : string.Empty;
         string phone = payload.TryGetProperty("phone", out var pProp) ? (pProp.GetString() ?? string.Empty) : string.Empty;
@@ -1978,7 +1947,17 @@ public class ApiDbController : ControllerBase
         string? bookingAccessToken = payload.TryGetProperty("bookingAccessToken", out var batProp)
             ? batProp.GetString()
             : Request.Headers["X-Booking-Access-Token"].FirstOrDefault();
+        string? paymentMethod = payload.TryGetProperty("paymentMethod", out var pmProp) ? pmProp.GetString() : "cash";
         string? idempotencyKey = payload.TryGetProperty("idempotencyKey", out var ikProp) ? ikProp.GetString() : null;
+
+        if (string.Equals((paymentMethod ?? string.Empty).Trim(), "paypal", StringComparison.OrdinalIgnoreCase))
+        {
+            var cfg = payPalOptions.CurrentValue.ValidateForCheckout();
+            if (!cfg.IsValid)
+            {
+                return StatusCode(503, new { ok = false, code = cfg.ErrorCode, error = cfg.ErrorMessage });
+            }
+        }
 
         var items = new List<OrderItemInput>();
         if (payload.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
@@ -1999,6 +1978,7 @@ public class ApiDbController : ControllerBase
             NoteOrAddress = address,
             BookingCode = bookingCode,
             BookingAccessToken = bookingAccessToken,
+            PaymentMethod = paymentMethod,
             IdempotencyKey = idempotencyKey,
             ActorAccountId = Function.IsLogin() ? Function._AccountId : null,
             ActorRoleId = Function.IsLogin() ? Function._RoleId : null,
@@ -2012,6 +1992,13 @@ public class ApiDbController : ControllerBase
             return StatusCode(res.StatusCode, new { ok = false, code = res.ErrorCode, error = res.ErrorMessage });
         }
 
+        string? guestOrderToken = null;
+        if (!string.IsNullOrWhiteSpace(res.Order.Code) && !res.Order.BookingId.HasValue)
+        {
+            guestOrderToken = payPalPaymentService.ProtectGuestOrderProof(res.Order.Code, res.Order.Phone ?? string.Empty);
+            SaveGuestBookingRecoveryProof($"ORDER:{res.Order.Code}", guestOrderToken, idempotencyKey);
+        }
+
         return Ok(new
         {
             ok = true,
@@ -2019,6 +2006,7 @@ public class ApiDbController : ControllerBase
             orderCode = res.Order.Code,
             totalAmount = res.Order.TotalAmount ?? 0,
             bookingCode = res.Order.BookingCode ?? string.Empty,
+            guestAccessToken = guestOrderToken,
             order = MapOrderDto(res.Order)
         });
     }
@@ -2255,6 +2243,17 @@ public class ApiDbController : ControllerBase
             .Where(t => t.PaymentMethod == "transfer")
             .Sum(t => string.Equals(t.TransactionType, "refund", StringComparison.OrdinalIgnoreCase) ? -Math.Abs(t.Amount) : Math.Max(0, t.Amount));
 
+        int paypalNet = ledgerRows
+            .Where(t => t.PaymentMethod == "paypal")
+            .Sum(t => string.Equals(t.TransactionType, "refund", StringComparison.OrdinalIgnoreCase) ? -Math.Abs(t.Amount) : Math.Max(0, t.Amount));
+
+        int payPalReconciliationCount = await _context.TbPayPalTransactions
+            .AsNoTracking()
+            .CountAsync(x => x.LocalStatus == "AmbiguousTimeout" ||
+                             x.LocalStatus == "CapturedCompensationPending" ||
+                             x.LocalStatus == "CompensationRefundRequired" ||
+                             x.LocalStatus == "Capturing");
+
         // Operational bookings within [dateFrom..dateTo] for occupancy & receivables visibility
         var bookingsInRange = await _context.TbBookings
             .AsNoTracking()
@@ -2382,6 +2381,8 @@ public class ApiDbController : ControllerBase
             totalCollectedRevenue,
             cashNetCollected = cashNet,
             transferNetCollected = transferNet,
+            paypalNetCollected = paypalNet,
+            payPalReconciliationCount,
             unpaidBookingReceivables,
             unpaidShopReceivables,
             unpaidReceivables,
