@@ -1107,7 +1107,7 @@ const SpikeTicket = {
       <div class="spk-ticket-card spk-ticket-${escapeAttr(theme)}" id="spkDigitalTicketCard" data-testid="spike-ticket-card" data-booking-code="${escapeAttr(booking.id || '')}" data-theme="${escapeAttr(theme)}">
         <div class="spk-ticket-header">
           <div class="spk-ticket-brand">
-            <span class="spk-ticket-logo-mark" aria-hidden="true">🏓</span>
+            <span class="spk-ticket-logo-mark"><img src="/assets/spike-logo.png" alt="Spike Pickleball Club" class="spk-ticket-logo-img" /></span>
             <div style="min-width:0;">
               <div class="spk-ticket-club-title">${escapeHtml(clubName)}</div>
               <div class="spk-ticket-club-sub">OFFICIAL DIGITAL COURT PASS · ${escapeHtml(clubAddr)}</div>

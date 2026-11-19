@@ -40,6 +40,23 @@ html[data-theme="dark"] .site-header {
   color: var(--text-primary);
 }
 
+.site-brand-logo {
+  height: 44px;
+  width: auto;
+  max-width: 132px;
+  object-fit: contain;
+  display: block;
+}
+
+.site-brand-logo-lg {
+  height: 52px;
+  max-width: 168px;
+}
+
+html[data-theme="dark"] .site-brand-logo {
+  filter: drop-shadow(0 1px 6px rgba(107, 203, 119, 0.22));
+}
+
 .site-brand-mark {
   width: 36px;
   height: 36px;
@@ -275,6 +292,7 @@ html[data-theme="dark"] .site-header {
 }
 
 @media (max-width: 520px) {
+  .site-brand-logo { height: 36px; max-width: 108px; }
   .site-brand-tag { display: none; }
   .header-cta-book { display: none; }
   .site-header-inner { gap: 8px; padding: 0 12px; }

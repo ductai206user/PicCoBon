@@ -48,17 +48,18 @@
 }
 
 .spk-ticket-logo-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: rgba(107, 203, 119, 0.2);
-  border: 1.5px solid var(--brand-secondary);
-  color: #FFFFFF;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
   flex-shrink: 0;
+}
+
+.spk-ticket-logo-img {
+  height: 36px;
+  width: auto;
+  max-width: 96px;
+  object-fit: contain;
+  display: block;
 }
 
 .spk-ticket-club-title {

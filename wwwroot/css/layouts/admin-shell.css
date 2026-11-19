@@ -76,6 +76,28 @@
   box-shadow: var(--shadow-brand);
 }
 
+.sh-brand-img-wide {
+  height: 34px;
+  width: auto;
+  max-width: 92px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+}
+
+.sh-brand-img-mini {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+html[data-theme="dark"] .sh-brand-img-wide {
+  filter: drop-shadow(0 1px 6px rgba(107, 203, 119, 0.22));
+}
+
 .sh-team-meta {
   display: flex;
   flex-direction: column;
@@ -263,11 +285,15 @@
   }
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-team-meta,
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-team-caret,
+  .sh-admin-shell[data-sidebar-collapsed="true"] .sh-brand-img-wide,
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-nav-group-label,
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-nav-text,
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-nav-user-text,
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-nav-user-logout {
     display: none;
+  }
+  .sh-admin-shell[data-sidebar-collapsed="true"] .sh-brand-img-mini {
+    display: block;
   }
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-team-switcher,
   .sh-admin-shell[data-sidebar-collapsed="true"] .sh-nav-item,
