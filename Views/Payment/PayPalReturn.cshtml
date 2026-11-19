@@ -10,7 +10,7 @@
     bool isSandbox = string.Equals(payPalEnv, "Sandbox", StringComparison.OrdinalIgnoreCase);
 }
 
-<main id="mainContent" class="page-main spk-receipt-stage"
+<main id="ppReceiptStage" class="page-main spk-receipt-stage spk-paypal-return-page"
       data-pp-mode="return"
       data-pp-valid-state="@(isValidState ? "true" : "false")"
       data-pp-state="@stateToken"
@@ -19,46 +19,6 @@
       data-pp-target-type="@targetType"
       data-pp-target-code="@targetCode"
       data-pp-env="@payPalEnv">
-
-    <!-- Subtle Ambient Court & Decorative Layer (Secondary to Receipt Card) -->
-    <div class="spk-receipt-bg-decor" aria-hidden="true">
-        <svg class="spk-receipt-court-lines" viewBox="0 0 1440 900" fill="none" preserveAspectRatio="xMidYMid slice">
-            <path d="M-80 260C220 90 520 40 900 180C1200 290 1380 210 1540 120" stroke="currentColor" stroke-width="1.5" opacity="0.24" />
-            <path d="M-60 720C280 560 580 610 940 760C1220 870 1400 790 1540 690" stroke="currentColor" stroke-width="1.5" opacity="0.20" />
-            <rect x="930" y="615" width="540" height="310" rx="8" stroke="currentColor" stroke-width="2" opacity="0.18" transform="rotate(-12 930 615)" />
-            <line x1="1080" y1="600" x2="1145" y2="905" stroke="currentColor" stroke-width="1.5" opacity="0.16" />
-        </svg>
-
-        <svg class="spk-receipt-court-art" viewBox="0 0 260 220" fill="none">
-            <!-- Quiet ambient Pickleball paddle & ball silhouette bottom-right -->
-            <g transform="translate(88 14) rotate(12)">
-                <rect x="34" y="132" width="22" height="58" rx="9" fill="#1F4D37" opacity="0.82" />
-                <rect x="34" y="132" width="22" height="58" rx="9" stroke="#064E3B" stroke-width="2" opacity="0.35" />
-                <rect x="4" y="8" width="84" height="128" rx="34" fill="url(#spkDecorPaddleGrad)" stroke="#065F46" stroke-width="2" opacity="0.92" />
-                <text x="46" y="64" text-anchor="middle" fill="#FFFFFF" fill-opacity="0.48" font-family="Plus Jakarta Sans, Inter, sans-serif" font-weight="800" font-size="13" letter-spacing="1.5">SPIKE</text>
-            </g>
-            <g transform="translate(26 118)">
-                <circle cx="32" cy="32" r="28" fill="url(#spkDecorBallGrad)" stroke="#65A30D" stroke-width="1.5" opacity="0.95" />
-                <circle cx="22" cy="21" r="3.4" fill="#4D7C0F" opacity="0.55" />
-                <circle cx="38" cy="19" r="3.2" fill="#4D7C0F" opacity="0.55" />
-                <circle cx="31" cy="33" r="3.6" fill="#4D7C0F" opacity="0.55" />
-                <circle cx="19" cy="37" r="3.1" fill="#4D7C0F" opacity="0.55" />
-                <circle cx="43" cy="35" r="3.2" fill="#4D7C0F" opacity="0.55" />
-                <circle cx="31" cy="48" r="3" fill="#4D7C0F" opacity="0.55" />
-            </g>
-            <defs>
-                <linearGradient id="spkDecorPaddleGrad" x1="4" y1="8" x2="88" y2="136" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#34A867" />
-                    <stop offset="100%" stop-color="#0D6E48" />
-                </linearGradient>
-                <radialGradient id="spkDecorBallGrad" cx="35%" cy="30%" r="70%">
-                    <stop offset="0%" stop-color="#ECFCCB" />
-                    <stop offset="55%" stop-color="#D9F99D" />
-                    <stop offset="100%" stop-color="#A3E635" />
-                </radialGradient>
-            </defs>
-        </svg>
-    </div>
 
     <div id="paypalCheckoutPageRoot"
          data-pp-mode="return"

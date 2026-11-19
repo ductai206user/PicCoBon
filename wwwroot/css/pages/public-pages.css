@@ -2749,6 +2749,54 @@ html[data-theme="dark"] .spk-receipt-btn-print:hover {
     break-inside: avoid;
   }
 }
+
+/* ==========================================================================
+   PAYPAL RETURN — SCOPED BACKGROUND IMAGE REPLACEMENT ONLY
+   Applies exclusively to /Payment/PayPalReturn (.spk-paypal-return-page).
+   Never affects /Payment/PayPalCancel, receipt card interior, or global styles.
+   ========================================================================== */
+.spk-receipt-stage.spk-paypal-return-page {
+  position: relative;
+  isolation: isolate;
+  background-color: #F0FDF4;
+  background-image: url("/images/payment/paypal-receipt-background.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+}
+
+html[data-theme="dark"] .spk-receipt-stage.spk-paypal-return-page {
+  background-color: #0C1410;
+  background-image:
+    linear-gradient(180deg, rgba(10, 20, 15, 0.78) 0%, rgba(12, 24, 18, 0.86) 100%),
+    url("/images/payment/paypal-receipt-background.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+}
+
+@media (max-width: 1023px) {
+  .spk-receipt-stage.spk-paypal-return-page,
+  html[data-theme="dark"] .spk-receipt-stage.spk-paypal-return-page {
+    background-position: 68% bottom;
+  }
+}
+
+@media (max-width: 767px) {
+  .spk-receipt-stage.spk-paypal-return-page,
+  html[data-theme="dark"] .spk-receipt-stage.spk-paypal-return-page {
+    background-position: center bottom;
+  }
+}
+
+@media print {
+  .spk-receipt-stage.spk-paypal-return-page,
+  html[data-theme="dark"] .spk-receipt-stage.spk-paypal-return-page {
+    background: #FFFFFF !important;
+    background-image: none !important;
+  }
+}
+
 html[data-theme="dark"] .spk-pay-option.is-selected {
   background: rgba(46, 139, 87, 0.16);
   border-color: var(--brand-secondary);
