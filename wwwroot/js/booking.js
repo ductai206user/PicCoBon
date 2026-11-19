@@ -766,47 +766,42 @@ function updateQuoteBadgeDom() {
   const badge = document.getElementById('bookingQuoteSourceBadge');
   if (!badge) return;
 
+  badge.style.background = '';
+  badge.style.color = '';
+  badge.style.borderColor = '';
+
   if (!HAS_SERVER_STATE) {
     badge.textContent = '⏳ Đang kết nối máy chủ...';
-    badge.style.background = 'rgba(148,163,184,0.2)';
-    badge.style.color = '#E2E8F0';
-    badge.style.borderColor = 'rgba(148,163,184,0.4)';
+    badge.className = 'badge badge-neutral';
     return;
   }
 
   if (!selectedStartTime) {
     badge.textContent = 'Chưa chọn khung giờ';
-    badge.style.background = 'rgba(245,158,11,0.2)';
-    badge.style.color = '#FCD34D';
-    badge.style.borderColor = 'rgba(245,158,11,0.45)';
+    badge.className = 'badge badge-warning';
     return;
   }
 
   if (quoteStatus === 'loading') {
     badge.textContent = '⏳ Đang lấy báo giá máy chủ...';
-    badge.style.background = 'rgba(59,130,246,0.22)';
-    badge.style.color = '#93C5FD';
-    badge.style.borderColor = 'rgba(59,130,246,0.45)';
+    badge.className = 'badge badge-info';
     return;
   }
 
   if (quoteStatus === 'error') {
     badge.textContent = '⚠️ Lỗi báo giá — Nhấn thử lại';
-    badge.style.background = 'rgba(239,68,68,0.25)';
-    badge.style.color = '#FCA5A5';
-    badge.style.borderColor = 'rgba(239,68,68,0.5)';
+    badge.className = 'badge badge-danger';
     return;
   }
 
   if (quoteStatus === 'ready' && latestServerQuote) {
     badge.textContent = '✓ Báo giá máy chủ';
-    badge.style.background = 'rgba(216,248,38,0.18)';
-    badge.style.color = 'var(--color-volt)';
-    badge.style.borderColor = 'rgba(216,248,38,0.35)';
+    badge.className = 'badge badge-success';
     return;
   }
 
   badge.textContent = 'Tạm tính · Chờ xác nhận';
+  badge.className = 'badge badge-neutral';
 }
 
 function syncSubmitButtonState() {

@@ -1351,19 +1351,19 @@ const SpikeTicket = {
       ctx.stroke();
 
       // Top accent banner
-      ctx.fillStyle = '#0F172A';
+      ctx.fillStyle = '#17251D';
       ctx.beginPath();
       ctx.roundRect(48, 48, 984, 160, [36, 36, 0, 0]);
       ctx.fill();
 
-      ctx.fillStyle = '#F97316';
+      ctx.fillStyle = '#2E8B57';
       ctx.fillRect(48, 202, 984, 8);
 
       // Header text
       ctx.fillStyle = '#FFFFFF';
       ctx.font = '900 38px system-ui, -apple-system, sans-serif';
       ctx.fillText(CMS_CONFIG.clubName || 'SPIKE PICKLEBALL CLUB', 96, 122);
-      ctx.fillStyle = '#94A3B8';
+      ctx.fillStyle = '#B7E4C7';
       ctx.font = '600 22px system-ui, -apple-system, sans-serif';
       ctx.fillText('OFFICIAL DIGITAL COURT PASS · VÉ ĐIỆN TỬ CHECK-IN', 96, 164);
 
@@ -1379,11 +1379,11 @@ const SpikeTicket = {
       ctx.fillText('SÂN THI ĐẤU', 96, 280);
       ctx.fillText('MÃ ĐẶT SÂN', 740, 280);
 
-      ctx.fillStyle = isDark ? '#F8FAFC' : '#0F172A';
+      ctx.fillStyle = isDark ? '#F8FAFC' : '#17251D';
       ctx.font = '900 44px system-ui, -apple-system, sans-serif';
       ctx.fillText(courtName, 96, 336);
 
-      ctx.fillStyle = '#F97316';
+      ctx.fillStyle = '#2E8B57';
       ctx.font = '900 44px ui-monospace, SFMono-Regular, Consolas, monospace';
       ctx.fillText(b.id, 740, 336);
 

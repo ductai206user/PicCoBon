@@ -366,13 +366,14 @@ public class V4ReleaseBlockersAndQrTests : IClassFixture<SpikeWebAppFactory>
         }
 
         // Case 1: Unpaid & Undelivered linked Pro Shop order (3 units) + direct POS item (2 units) -> Cancel restores exact 5 units (back to 25)
-        string date1 = BookingService.GetVietnamNow().ToString("yyyy-MM-dd");
+        string todayIso = BookingService.GetVietnamNow().ToString("yyyy-MM-dd");
+        string tomorrowIso = BookingService.GetVietnamNow().AddDays(1).ToString("yyyy-MM-dd");
         var bkRes1 = await PostJsonWithCsrfAsync(staffClient, "/api/bookings", new
         {
             courtId = _factory.Court1Id,
             customerName = "Khách Gộp Đơn Pro Shop",
             customerPhone = "0955666777",
-            date = date1,
+            date = tomorrowIso,
             time = "20:00",
             duration = 60,
             autoApprove = true
@@ -380,6 +381,16 @@ public class V4ReleaseBlockersAndQrTests : IClassFixture<SpikeWebAppFactory>
         Assert.Equal(HttpStatusCode.OK, bkRes1.StatusCode);
         using var bkDoc1 = JsonDocument.Parse(await bkRes1.Content.ReadAsStringAsync());
         string bookingCode1 = bkDoc1.RootElement.GetProperty("booking").GetProperty("id").GetString()!;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
+            var bk1 = await db.TbBookings.FirstAsync(b => b.BookingCode == bookingCode1);
+            bk1.BookingDate = todayIso;
+            bk1.StartTime = "23:30";
+            bk1.Duration = 60;
+            await db.SaveChangesAsync();
+        }
 
         // Create linked Pro Shop order for 3 units
         var ordRes1 = await PostJsonWithCsrfAsync(staffClient, "/api/orders/create", new
@@ -437,13 +448,23 @@ public class V4ReleaseBlockersAndQrTests : IClassFixture<SpikeWebAppFactory>
             courtId = _factory.Court1Id,
             customerName = "Khách Đã Nhận Hàng",
             customerPhone = "0955666888",
-            date = date1,
+            date = tomorrowIso,
             time = "21:00",
             duration = 60,
             autoApprove = true
         }, staffCsrf);
         using var bkDoc2 = JsonDocument.Parse(await bkRes2.Content.ReadAsStringAsync());
         string bookingCode2 = bkDoc2.RootElement.GetProperty("booking").GetProperty("id").GetString()!;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
+            var bk2 = await db.TbBookings.FirstAsync(b => b.BookingCode == bookingCode2);
+            bk2.BookingDate = todayIso;
+            bk2.StartTime = "23:30";
+            bk2.Duration = 60;
+            await db.SaveChangesAsync();
+        }
 
         var ordRes2 = await PostJsonWithCsrfAsync(staffClient, "/api/orders/create", new
         {

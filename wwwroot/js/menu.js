@@ -564,7 +564,7 @@ function animateFlyToCart(productId) {
     padding: '6px',
     background: '#FFFFFF',
     borderRadius: '14px',
-    border: '2px solid #FF5520',
+    border: '2px solid #2E8B57',
     boxShadow: '0 14px 28px rgba(11, 17, 30, 0.24)',
     pointerEvents: 'none',
     zIndex: '9999'

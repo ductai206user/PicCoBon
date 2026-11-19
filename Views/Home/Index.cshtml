@@ -15,6 +15,13 @@
     string ssrClubDesc = ssrSettings.RawCms.TryGetValue("clubDesc", out var cdVal) && !string.IsNullOrWhiteSpace(cdVal)
         ? cdVal
         : "Đăng ký tài khoản hội viên chính thức để tích lũy chi tiêu thực thu và tự động nâng hạng thẻ Bạc (-5%), Vàng (-10%), VIP Kim Cương (-15%).";
+    var featuredProducts = await SsrDb.TbProducts
+        .Include(p => p.CategoryProduct)
+        .AsNoTracking()
+        .Where(p => p.IsActive && (p.UnitInStock ?? p.Quantity ?? 0) > 0)
+        .OrderBy(p => p.ProductId)
+        .Take(3)
+        .ToListAsync();
 }
 
 <!-- BRIGHT NOTION x SPIKE HERO -->
@@ -197,15 +204,64 @@
     </div>
 </section>
 
-<!-- QUICK 3-STEP BOOKING GUIDE & PRO SHOP CTA -->
+<!-- QUICK 3-STEP BOOKING GUIDE & FEATURED PRO SHOP -->
 <section class="web-section web-section-alt">
     <div class="container">
         <div class="section-head">
             <div>
-                <h2 class="section-heading">Quy trình đặt sân &amp; Tiện ích tại quầy</h2>
+                <span class="section-kicker">Pro Shop &amp; Dịch vụ tại sảnh</span>
+                <h2 class="section-heading">Đồ uống lạnh &amp; Phụ kiện thi đấu nổi bật</h2>
+                <p class="section-sub">Đặt trước hoặc gộp thẳng vào ca sân đang chơi — nhận ngay tại quầy hoặc giao tận sân</p>
+            </div>
+            <a href="/Product" class="btn btn-primary btn-sm">
+                <iconify-icon icon="lucide:shopping-bag" width="15"></iconify-icon>
+                <span>Mở toàn bộ Pro Shop</span>
+            </a>
+        </div>
+
+        @if (featuredProducts.Any())
+        {
+            <div class="menu-grid" style="margin-bottom:36px;">
+                @foreach (var item in featuredProducts)
+                {
+                    var catAlias = item.CategoryProduct?.Alias ?? "drink";
+                    var resolvedImg = PickleballClub.Services.ProductImageService.NormalizeProductImageUrl(item.Image, catAlias);
+                    var stock = item.UnitInStock ?? item.Quantity ?? 0;
+                    var catLabel = catAlias == "drink" ? "Đồ uống" : catAlias == "food" ? "Đồ ăn" : "Phụ kiện";
+                    <article class="menu-item">
+                        <div class="menu-item-media">
+                            <img class="menu-item-img"
+                                 src="@resolvedImg"
+                                 alt="@item.Title"
+                                 width="240"
+                                 height="240"
+                                 loading="lazy"
+                                 decoding="async"
+                                 onerror="this.onerror=null;this.src='/assets/products/placeholder-default.svg';" />
+                            <span class="menu-item-cat-pill">@catLabel</span>
+                            <span class="menu-item-stock-badge @(stock <= 5 ? "is-low" : "is-ok")">Còn @stock</span>
+                        </div>
+                        <div class="menu-item-body">
+                            <h3 class="menu-item-name">@item.Title</h3>
+                            <p class="menu-item-desc">@(!string.IsNullOrWhiteSpace(item.Description) ? item.Description : "Sẵn sàng phục vụ tại sảnh CLB")</p>
+                        </div>
+                        <div class="menu-item-footer">
+                            <div class="menu-item-price-block">
+                                <span class="menu-item-price-label">Đơn giá</span>
+                                <span class="menu-item-price text-mono">@((item.Price ?? 0).ToString("#,0", vndFmt))đ</span>
+                            </div>
+                            <a href="/Product" class="btn btn-secondary btn-sm">Chọn mua</a>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+
+        <div class="section-head">
+            <div>
+                <h2 class="section-heading">Quy trình đặt sân &amp; Check-in 3 bước</h2>
                 <p class="section-sub">Rõ ràng từng bước từ giữ lịch trực tuyến đến check-in QR tại quầy lễ tân</p>
             </div>
-            <a href="/Product" class="btn btn-secondary btn-sm">Ghé Cửa hàng Pro Shop</a>
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">

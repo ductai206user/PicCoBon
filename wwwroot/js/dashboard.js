@@ -195,7 +195,7 @@ function renderDashboard() {
         const isPlayingNow = busySlot && busySlot.status === 'playing';
         const isReservedNow = busySlot && !isPlayingNow;
 
-        const dotColor = isLockedNow ? '#EF4444' : isPlayingNow ? '#FF5520' : isReservedNow ? '#3B82F6' : '#10B981';
+        const dotColor = isLockedNow ? '#EF4444' : isPlayingNow ? '#2E8B57' : isReservedNow ? '#3B82F6' : '#10B981';
         const statusTxt = isLockedNow ? 'Bảo trì' : isPlayingNow ? 'Đang thi đấu' : isReservedNow ? 'Đã kín giờ này' : 'Đang trống';
         const shortName = String(c.name || '').replace(' (Arena A)', '').replace(' (Arena B)', '');
         return `

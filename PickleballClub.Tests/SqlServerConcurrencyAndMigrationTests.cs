@@ -526,15 +526,17 @@ VALUES (N'PB-LEG001', 1, 1, N'Hội viên Cũ', N'0909111222', N'2026-11-18', N'
             var bookingService = CreateBookingService();
 
             // 1. Create booking at 18:00 (Peak VIP: 120k + 20k + 30k = 170,000đ)
+            DateTime ledgerDay = BookingService.GetVietnamNow().Date.AddDays(1);
+            string ledgerDateStr = ledgerDay.ToString("yyyy-MM-dd");
             var createRes = await bookingService.CreateBookingAsync(ctx, new BookingCreateInput
             {
                 CourtId = courtId,
                 CustomerName = "Nguyễn Văn Ledger",
                 Phone = "0905123456",
-                BookingDate = "2026-11-18",
+                BookingDate = ledgerDateStr,
                 StartTime = "18:00",
                 Duration = 60,
-                ReferenceNow = new DateTime(2026, 11, 18, 10, 0, 0)
+                ReferenceNow = ledgerDay.AddHours(10)
             });
             Assert.True(createRes.Success);
             string code = createRes.Booking!.BookingCode;
@@ -542,14 +544,14 @@ VALUES (N'PB-LEG001', 1, 1, N'Hội viên Cũ', N'0909111222', N'2026-11-18', N'
 
             // 2. Pending booking CANNOT check-in before approval (P1-07)
             var prematureCheckIn = await bookingService.CheckInBookingAsync(
-                ctx, createRes.Booking.CheckInToken!, 1, "admin", null, new DateTime(2026, 11, 18, 17, 50, 0));
+                ctx, createRes.Booking.CheckInToken!, 1, "admin", null, ledgerDay.AddHours(17).AddMinutes(50));
             Assert.False(prematureCheckIn.Success);
             Assert.Equal(409, prematureCheckIn.StatusCode);
 
             // 3. Approve -> Check-in within window -> status becomes "playing"
             Assert.True((await bookingService.ApproveBookingAsync(ctx, code, 1, "admin")).Success);
             var validCheckIn = await bookingService.CheckInBookingAsync(
-                ctx, createRes.Booking.CheckInToken!, 1, "admin", null, new DateTime(2026, 11, 18, 17, 50, 0));
+                ctx, createRes.Booking.CheckInToken!, 1, "admin", null, ledgerDay.AddHours(17).AddMinutes(50));
             Assert.True(validCheckIn.Success);
             Assert.Equal("playing", validCheckIn.Booking!.Status);
 
@@ -595,27 +597,28 @@ VALUES (N'PB-LEG001', 1, 1, N'Hội viên Cũ', N'0909111222', N'2026-11-18', N'
             Assert.Equal(3, await ctx.TbPaymentTransactions.CountAsync(t => t.BookingCode == code));
 
             // 10. Lifecycle Reconciliation: approved without check-in NEVER becomes playing; past grace -> no_show
+            DateTime noShowDay = ledgerDay.AddDays(1);
             var noShowBk = await bookingService.CreateBookingAsync(ctx, new BookingCreateInput
             {
                 CourtId = courtId,
                 CustomerName = "Khách Vắng Mặt",
                 Phone = "0905999888",
-                BookingDate = "2026-11-19",
+                BookingDate = noShowDay.ToString("yyyy-MM-dd"),
                 StartTime = "08:00",
                 Duration = 60,
                 ActorRoleId = 3,
                 AutoApproveWalkIn = true,
-                ReferenceNow = new DateTime(2026, 11, 19, 7, 0, 0)
+                ReferenceNow = noShowDay.AddHours(7)
             });
             Assert.True(noShowBk.Success);
 
             // At 08:20 (during slot, no check-in) -> still approved, NEVER auto-playing!
-            await bookingService.ReconcileBookingLifecycleAsync(ctx, new DateTime(2026, 11, 19, 8, 20, 0));
+            await bookingService.ReconcileBookingLifecycleAsync(ctx, noShowDay.AddHours(8).AddMinutes(20));
             var midCheck = await ctx.TbBookings.AsNoTracking().SingleAsync(b => b.BookingCode == noShowBk.Booking!.BookingCode);
             Assert.Equal("approved", midCheck.Status);
 
             // At 09:30 (past grace window without check-in) -> marked no_show!
-            await bookingService.ReconcileBookingLifecycleAsync(ctx, new DateTime(2026, 11, 19, 9, 30, 0));
+            await bookingService.ReconcileBookingLifecycleAsync(ctx, noShowDay.AddHours(9).AddMinutes(30));
             var afterGrace = await ctx.TbBookings.AsNoTracking().SingleAsync(b => b.BookingCode == noShowBk.Booking!.BookingCode);
             Assert.Equal("no_show", afterGrace.Status);
         }
