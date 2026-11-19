@@ -68,6 +68,7 @@ public sealed class PaymentController : Controller
         ViewBag.TargetType = payload?.TargetType ?? string.Empty;
         ViewBag.TargetCode = payload?.TargetCode ?? string.Empty;
         ViewBag.VndPerUsd = _payPalOptions.CurrentValue.VndPerUsd;
+        ViewBag.PayPalEnvironment = _payPalOptions.CurrentValue.Environment ?? "Sandbox";
         return View();
     }
 
@@ -85,6 +86,7 @@ public sealed class PaymentController : Controller
         ViewBag.AttemptCode = payload?.AttemptCode ?? string.Empty;
         ViewBag.TargetType = payload?.TargetType ?? string.Empty;
         ViewBag.TargetCode = payload?.TargetCode ?? string.Empty;
+        ViewBag.PayPalEnvironment = _payPalOptions.CurrentValue.Environment ?? "Sandbox";
         return View();
     }
 
@@ -429,6 +431,7 @@ public sealed class PaymentController : Controller
             amountUsd = result.AmountUsd,
             currencyCode = result.CurrencyCode,
             exchangeRateVndPerUsd = result.ExchangeRateVndPerUsd,
+            environment = _payPalOptions.CurrentValue.Environment ?? "Sandbox",
             booking = bookingDto,
             order = orderDto
         };

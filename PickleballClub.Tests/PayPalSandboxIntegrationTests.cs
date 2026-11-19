@@ -1358,4 +1358,144 @@ END";
             await cmd.ExecuteNonQueryAsync();
         }
     }
+
+    [Fact]
+    public async Task TC22_PayPalReceiptViews_RenderEnvironmentAwareMarkup_AndReplayImmutableAmounts()
+    {
+        using var client = await LoginAsync("pp_member_a", "MemberAPass!2026");
+
+        // Create a Pro Shop order in VND (26,000d * 2 = 52,000d -> 2.00 USD at 26,000)
+        var ordResp = await PostJsonWithCsrfAsync(client, "/api/orders/create", new
+        {
+            customerName = "Hội Viên A Receipt",
+            phone = "0903000011",
+            paymentMethod = "paypal",
+            idempotencyKey = Guid.NewGuid().ToString("N"),
+            items = new[] { new { productId = _factory.Product1Id, qty = 2 } }
+        });
+        string ordBody = await ordResp.Content.ReadAsStringAsync();
+        Assert.True(ordResp.StatusCode == HttpStatusCode.OK, $"Create order failed {ordResp.StatusCode}: {ordBody}");
+        using var ordDoc = JsonDocument.Parse(ordBody);
+        string orderCode = ordDoc.RootElement.GetProperty("orderCode").GetString()!;
+        int totalVnd = ordDoc.RootElement.GetProperty("totalAmount").GetInt32();
+        Assert.Equal(52_000, totalVnd);
+
+        var started = await StartPayPalCheckoutAndCaptureReturnStateAsync(client, "order", orderCode);
+        Assert.Equal(2.00m, started.AmountUsd);
+
+        // Verify /Payment/PayPalReturn & /Payment/PayPalCancel SSR HTML
+        var returnPageResp = await client.GetAsync($"/Payment/PayPalReturn?state={Uri.EscapeDataString(started.StateToken)}&token={Uri.EscapeDataString(started.PayPalOrderId)}");
+        Assert.Equal(HttpStatusCode.OK, returnPageResp.StatusCode);
+        string returnHtml = await returnPageResp.Content.ReadAsStringAsync();
+        Assert.Contains("data-pp-env=\"Sandbox\"", returnHtml, StringComparison.Ordinal);
+        Assert.Contains("PAYPAL SANDBOX", returnHtml, StringComparison.Ordinal);
+        Assert.Contains("id=\"paypalOutcomeCard\"", returnHtml, StringComparison.Ordinal);
+        Assert.Contains("id=\"ppCompletedTicketHost\"", returnHtml, StringComparison.Ordinal);
+        Assert.Contains("spk-receipt-amount-box", returnHtml, StringComparison.Ordinal);
+
+        var cancelPageResp = await client.GetAsync($"/Payment/PayPalCancel?state={Uri.EscapeDataString(started.StateToken)}&token={Uri.EscapeDataString(started.PayPalOrderId)}");
+        Assert.Equal(HttpStatusCode.OK, cancelPageResp.StatusCode);
+        string cancelHtml = await cancelPageResp.Content.ReadAsStringAsync();
+        Assert.Contains("data-pp-env=\"Sandbox\"", cancelHtml, StringComparison.Ordinal);
+        Assert.Contains("PAYPAL SANDBOX", cancelHtml, StringComparison.Ordinal);
+        Assert.Contains("spk-receipt-card is-state-cancelled", cancelHtml, StringComparison.Ordinal);
+
+        // Approve & perform 1st server capture
+        _factory.FakePayPal.ApproveOrder(started.PayPalOrderId);
+        int captureCallsBefore = _factory.FakePayPal.CaptureCallCount;
+
+        var cap1Resp = await PostJsonWithCsrfAsync(client, "/api/payments/paypal/capture", new
+        {
+            state = started.StateToken,
+            payPalOrderId = started.PayPalOrderId
+        });
+        string cap1Body = await cap1Resp.Content.ReadAsStringAsync();
+        Assert.True(cap1Resp.StatusCode == HttpStatusCode.OK, $"First capture failed: {cap1Body}");
+        using var cap1Doc = JsonDocument.Parse(cap1Body);
+        Assert.Equal("Completed", cap1Doc.RootElement.GetProperty("localStatus").GetString());
+        Assert.False(cap1Doc.RootElement.GetProperty("deduplicated").GetBoolean());
+        Assert.Equal(52_000, cap1Doc.RootElement.GetProperty("amountVnd").GetInt32());
+        Assert.Equal(2.00m, cap1Doc.RootElement.GetProperty("amountUsd").GetDecimal());
+        Assert.Equal(26_000m, cap1Doc.RootElement.GetProperty("exchangeRateVndPerUsd").GetDecimal());
+        Assert.Equal("Sandbox", cap1Doc.RootElement.GetProperty("environment").GetString());
+        Assert.Equal(captureCallsBefore + 1, _factory.FakePayPal.CaptureCallCount);
+
+        // Simulate runtime FX rate change (26,000 -> 20,000, then 0/invalid) and repeat F5 capture callbacks
+        var optionsCache = _factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitorCache<PayPalOptions>>();
+        try
+        {
+            optionsCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+            optionsCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, new PayPalOptions
+            {
+                Environment = "Sandbox",
+                BaseUrl = PayPalOptions.OfficialSandboxBaseUrl,
+                ClientId = "sbx-test-client-id",
+                ClientSecret = "sbx-test-client-secret",
+                WebhookId = "WH-SBX-TEST-01",
+                Currency = "USD",
+                VndPerUsd = 20_000m
+            });
+
+            var replay1Resp = await PostJsonWithCsrfAsync(client, "/api/payments/paypal/capture", new
+            {
+                state = started.StateToken,
+                payPalOrderId = started.PayPalOrderId
+            });
+            string replay1Body = await replay1Resp.Content.ReadAsStringAsync();
+            Assert.True(replay1Resp.StatusCode == HttpStatusCode.OK, $"Replay under altered FX failed: {replay1Body}");
+            using var replay1Doc = JsonDocument.Parse(replay1Body);
+            Assert.True(replay1Doc.RootElement.GetProperty("deduplicated").GetBoolean());
+            Assert.Equal(52_000, replay1Doc.RootElement.GetProperty("amountVnd").GetInt32());
+            Assert.Equal(2.00m, replay1Doc.RootElement.GetProperty("amountUsd").GetDecimal());
+            Assert.Equal(26_000m, replay1Doc.RootElement.GetProperty("exchangeRateVndPerUsd").GetDecimal());
+            Assert.Equal(captureCallsBefore + 1, _factory.FakePayPal.CaptureCallCount);
+
+            // Even if FX config is temporarily set to 0 / invalid later, already-Completed historical receipt remains readable on F5
+            optionsCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+            optionsCache.TryAdd(Microsoft.Extensions.Options.Options.DefaultName, new PayPalOptions
+            {
+                Environment = "Sandbox",
+                BaseUrl = PayPalOptions.OfficialSandboxBaseUrl,
+                ClientId = "sbx-test-client-id",
+                ClientSecret = "sbx-test-client-secret",
+                WebhookId = "WH-SBX-TEST-01",
+                Currency = "USD",
+                VndPerUsd = 0m
+            });
+
+            var replay2Resp = await PostJsonWithCsrfAsync(client, "/api/payments/paypal/capture", new
+            {
+                state = started.StateToken,
+                payPalOrderId = started.PayPalOrderId
+            });
+            string replay2Body = await replay2Resp.Content.ReadAsStringAsync();
+            Assert.True(replay2Resp.StatusCode == HttpStatusCode.OK, $"Replay under VndPerUsd=0 failed: {replay2Body}");
+            using var replay2Doc = JsonDocument.Parse(replay2Body);
+            Assert.True(replay2Doc.RootElement.GetProperty("deduplicated").GetBoolean());
+            Assert.Equal(2.00m, replay2Doc.RootElement.GetProperty("amountUsd").GetDecimal());
+            Assert.Equal(26_000m, replay2Doc.RootElement.GetProperty("exchangeRateVndPerUsd").GetDecimal());
+            Assert.Equal(captureCallsBefore + 1, _factory.FakePayPal.CaptureCallCount);
+        }
+        finally
+        {
+            optionsCache.TryRemove(Microsoft.Extensions.Options.Options.DefaultName);
+        }
+
+        // Unauthorized users (another member or anonymous user without owner/guest proof) must get 403 Forbidden
+        using var otherMember = await LoginAsync("pp_member_b", "MemberBPass!2026");
+        var forbidMemberResp = await PostJsonWithCsrfAsync(otherMember, "/api/payments/paypal/capture", new
+        {
+            state = started.StateToken,
+            payPalOrderId = started.PayPalOrderId
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, forbidMemberResp.StatusCode);
+
+        using var anonClient = CreateCookieClient();
+        var forbidAnonResp = await PostJsonWithCsrfAsync(anonClient, "/api/payments/paypal/capture", new
+        {
+            state = started.StateToken,
+            payPalOrderId = started.PayPalOrderId
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, forbidAnonResp.StatusCode);
+    }
 }

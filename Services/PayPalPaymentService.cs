@@ -1116,11 +1116,32 @@ public sealed class PayPalPaymentService
         bool allowCaptureApproved,
         CancellationToken cancellationToken)
     {
+        if (!await IsPayPalSchemaAvailableAsync(db, cancellationToken))
+        {
+            return PayPalCheckoutResult.Fail(
+                "Cơ sở dữ liệu hiện tại chưa cập nhật bảng tb_PayPalTransaction (cần chạy migration V5_PayPalSandboxIntegration).",
+                503,
+                "PAYPAL_SCHEMA_NOT_MIGRATED");
+        }
+
         var opts = _optionsMonitor.CurrentValue;
         var configCheck = opts.ValidateForCheckout();
         if (!configCheck.IsValid)
         {
-            return PayPalCheckoutResult.Fail(configCheck.ErrorMessage, 503, configCheck.ErrorCode);
+            // Historical completed/refunded receipts remain safely replayable on browser refresh
+            // even if PayPal FX or checkout configuration was subsequently altered.
+            var terminalSnapshot = await db.TbPayPalTransactions
+                .AsNoTracking()
+                .Where(x => x.PublicAttemptCode == attemptCode)
+                .Select(x => new { x.LocalStatus })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            bool isTerminalReplay = terminalSnapshot != null &&
+                terminalSnapshot.LocalStatus is "Completed" or "Refunded" or "RefundedAfterExpiry";
+            if (!isTerminalReplay)
+            {
+                return PayPalCheckoutResult.Fail(configCheck.ErrorMessage, 503, configCheck.ErrorCode);
+            }
         }
 
         bool isRelational = db.Database.IsRelational();

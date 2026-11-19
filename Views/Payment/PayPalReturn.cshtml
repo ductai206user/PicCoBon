@@ -6,9 +6,11 @@
     string attemptCode = ViewBag.AttemptCode as string ?? string.Empty;
     string targetType = ViewBag.TargetType as string ?? "booking";
     string targetCode = ViewBag.TargetCode as string ?? string.Empty;
+    string payPalEnv = ViewBag.PayPalEnvironment as string ?? "Sandbox";
+    bool isSandbox = string.Equals(payPalEnv, "Sandbox", StringComparison.OrdinalIgnoreCase);
 }
 
-<main id="mainContent" class="page-main spk-paypal-page"
+<main id="mainContent" class="page-main spk-receipt-stage"
       data-pp-mode="return"
       data-pp-valid-state="@(isValidState ? "true" : "false")"
       data-pp-state="@stateToken"
@@ -16,7 +18,48 @@
       data-pp-attempt="@attemptCode"
       data-pp-target-type="@targetType"
       data-pp-target-code="@targetCode"
-      style="padding:36px 0 64px;">
+      data-pp-env="@payPalEnv">
+
+    <!-- Subtle Ambient Court & Decorative Layer (Secondary to Receipt Card) -->
+    <div class="spk-receipt-bg-decor" aria-hidden="true">
+        <svg class="spk-receipt-court-lines" viewBox="0 0 1440 900" fill="none" preserveAspectRatio="xMidYMid slice">
+            <path d="M-80 260C220 90 520 40 900 180C1200 290 1380 210 1540 120" stroke="currentColor" stroke-width="1.5" opacity="0.24" />
+            <path d="M-60 720C280 560 580 610 940 760C1220 870 1400 790 1540 690" stroke="currentColor" stroke-width="1.5" opacity="0.20" />
+            <rect x="930" y="615" width="540" height="310" rx="8" stroke="currentColor" stroke-width="2" opacity="0.18" transform="rotate(-12 930 615)" />
+            <line x1="1080" y1="600" x2="1145" y2="905" stroke="currentColor" stroke-width="1.5" opacity="0.16" />
+        </svg>
+
+        <svg class="spk-receipt-court-art" viewBox="0 0 260 220" fill="none">
+            <!-- Quiet ambient Pickleball paddle & ball silhouette bottom-right -->
+            <g transform="translate(88 14) rotate(12)">
+                <rect x="34" y="132" width="22" height="58" rx="9" fill="#1F4D37" opacity="0.82" />
+                <rect x="34" y="132" width="22" height="58" rx="9" stroke="#064E3B" stroke-width="2" opacity="0.35" />
+                <rect x="4" y="8" width="84" height="128" rx="34" fill="url(#spkDecorPaddleGrad)" stroke="#065F46" stroke-width="2" opacity="0.92" />
+                <text x="46" y="64" text-anchor="middle" fill="#FFFFFF" fill-opacity="0.48" font-family="Plus Jakarta Sans, Inter, sans-serif" font-weight="800" font-size="13" letter-spacing="1.5">SPIKE</text>
+            </g>
+            <g transform="translate(26 118)">
+                <circle cx="32" cy="32" r="28" fill="url(#spkDecorBallGrad)" stroke="#65A30D" stroke-width="1.5" opacity="0.95" />
+                <circle cx="22" cy="21" r="3.4" fill="#4D7C0F" opacity="0.55" />
+                <circle cx="38" cy="19" r="3.2" fill="#4D7C0F" opacity="0.55" />
+                <circle cx="31" cy="33" r="3.6" fill="#4D7C0F" opacity="0.55" />
+                <circle cx="19" cy="37" r="3.1" fill="#4D7C0F" opacity="0.55" />
+                <circle cx="43" cy="35" r="3.2" fill="#4D7C0F" opacity="0.55" />
+                <circle cx="31" cy="48" r="3" fill="#4D7C0F" opacity="0.55" />
+            </g>
+            <defs>
+                <linearGradient id="spkDecorPaddleGrad" x1="4" y1="8" x2="88" y2="136" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#34A867" />
+                    <stop offset="100%" stop-color="#0D6E48" />
+                </linearGradient>
+                <radialGradient id="spkDecorBallGrad" cx="35%" cy="30%" r="70%">
+                    <stop offset="0%" stop-color="#ECFCCB" />
+                    <stop offset="55%" stop-color="#D9F99D" />
+                    <stop offset="100%" stop-color="#A3E635" />
+                </radialGradient>
+            </defs>
+        </svg>
+    </div>
+
     <div id="paypalCheckoutPageRoot"
          data-pp-mode="return"
          data-pp-valid-state="@(isValidState ? "true" : "false")"
@@ -25,41 +68,115 @@
          data-pp-attempt="@attemptCode"
          data-pp-target-type="@targetType"
          data-pp-target-code="@targetCode"
-         class="container"
-         style="max-width:740px;">
+         data-pp-env="@payPalEnv"
+         class="spk-receipt-shell">
 
-        <div class="card spk-pp-outcome-card" id="paypalOutcomeCard">
-            <div class="card-header" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-                <span class="badge badge-neutral" id="ppStatusBadge">ĐANG XÁC THỰC PAYPAL SANDBOX...</span>
-                <span class="spk-sandbox-pill">
-                    <iconify-icon icon="lucide:flask-conical" width="13"></iconify-icon>
-                    <span>PAYPAL SANDBOX · USD TEST MODE</span>
-                </span>
+        <article class="spk-receipt-card is-state-loading" id="paypalOutcomeCard" aria-live="polite">
+            <div class="spk-receipt-top-row">
+                @if (isSandbox)
+                {
+                    <span class="spk-receipt-env-pill" id="ppEnvBadge">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M10 2v7.31l-4.89 8.43A2 2 0 0 0 6.84 21h10.32a2 2 0 0 0 1.73-3.26L14 9.31V2" />
+                            <path d="M8.5 2h7" />
+                            <path d="M7 16h10" />
+                        </svg>
+                        <span>PAYPAL SANDBOX · USD TEST MODE</span>
+                    </span>
+                }
+                <span class="spk-receipt-live-chip" id="ppStatusBadge" style="display:none;">Đang xác thực...</span>
             </div>
 
-            <div class="card-body" style="padding:28px 24px;text-align:center;">
-                <div class="spk-pp-icon-circle" id="ppIconCircle">
-                    <iconify-icon icon="lucide:loader-circle" width="34" id="ppMainIcon" class="pp-spin"></iconify-icon>
+            <header class="spk-receipt-hero">
+                <div class="spk-receipt-emblem-wrap" id="ppEmblemWrap">
+                    <!-- Flanking subtle olive/laurel sprigs & confetti (shown calmly on completed) -->
+                    <svg class="spk-receipt-laurel spk-receipt-laurel-left" viewBox="0 0 64 92" fill="none" aria-hidden="true">
+                        <path d="M52 84C28 72 16 48 22 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35" />
+                        <ellipse cx="22" cy="24" rx="5" ry="10" transform="rotate(-28 22 24)" fill="currentColor" opacity="0.28" />
+                        <ellipse cx="16" cy="40" rx="5" ry="10" transform="rotate(-40 16 40)" fill="currentColor" opacity="0.32" />
+                        <ellipse cx="19" cy="57" rx="5" ry="10" transform="rotate(-55 19 57)" fill="currentColor" opacity="0.28" />
+                        <ellipse cx="29" cy="72" rx="5" ry="9" transform="rotate(-68 29 72)" fill="currentColor" opacity="0.24" />
+                    </svg>
+
+                    <div class="spk-receipt-halo" aria-hidden="true"></div>
+                    <div class="spk-receipt-circle" id="ppIconCircle">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" id="ppMainIcon" class="pp-spin" aria-hidden="true">
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                    </div>
+
+                    <svg class="spk-receipt-laurel spk-receipt-laurel-right" viewBox="0 0 64 92" fill="none" aria-hidden="true">
+                        <path d="M12 84C36 72 48 48 42 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.35" />
+                        <ellipse cx="42" cy="24" rx="5" ry="10" transform="rotate(28 42 24)" fill="currentColor" opacity="0.28" />
+                        <ellipse cx="48" cy="40" rx="5" ry="10" transform="rotate(40 48 40)" fill="currentColor" opacity="0.32" />
+                        <ellipse cx="45" cy="57" rx="5" ry="10" transform="rotate(55 45 57)" fill="currentColor" opacity="0.28" />
+                        <ellipse cx="35" cy="72" rx="5" ry="9" transform="rotate(68 35 72)" fill="currentColor" opacity="0.24" />
+                    </svg>
+
+                    <span class="spk-receipt-fleck spk-fleck-1" aria-hidden="true"></span>
+                    <span class="spk-receipt-fleck spk-fleck-2" aria-hidden="true"></span>
+                    <span class="spk-receipt-fleck spk-fleck-3" aria-hidden="true"></span>
+                    <span class="spk-receipt-fleck spk-fleck-4" aria-hidden="true"></span>
                 </div>
 
-                <h1 class="sn-h2" id="ppOutcomeTitle" style="margin:16px 0 8px;">Đang xác nhận thanh toán từ PayPal Sandbox...</h1>
-                <p id="ppOutcomeSubtitle" style="margin:0 auto 20px;max-width:540px;color:var(--text-secondary);font-size:0.93rem;line-height:1.6;">
+                <h1 class="spk-receipt-title" id="ppOutcomeTitle">Đang xác nhận thanh toán từ PayPal Sandbox...</h1>
+                <p class="spk-receipt-subtitle" id="ppOutcomeSubtitle">
                     Máy chủ đang kiểm tra trạng thái phê duyệt và xác thực số tiền giao dịch trước khi ghi nhận vào sổ cái.
                 </p>
+            </header>
 
-                <div class="payment-summary" id="ppMetaSummary" style="display:none;max-width:560px;margin:0 auto 20px;text-align:left;border-radius:var(--radius-md);"></div>
-
-                <div id="ppOrderReceiptBox" style="display:none;max-width:560px;margin:0 auto 20px;"></div>
-
-                <div id="ppCompletedTicketWrap" style="display:none;max-width:520px;margin:0 auto 22px;text-align:left;">
-                    <div id="ppCompletedTicketHost"></div>
+            <!-- Highlighted Monetary Banner -->
+            <section class="spk-receipt-amount-box" id="ppAmountBanner" style="display:none;" aria-label="Giá trị thanh toán">
+                <svg class="spk-receipt-amount-waves" viewBox="0 0 720 180" fill="none" preserveAspectRatio="none" aria-hidden="true">
+                    <path class="spk-receipt-wave-bottom" d="M0 132C155 82 285 162 455 112C575 76 660 95 720 65V180H0V132Z" />
+                    <path class="spk-receipt-wave-top" d="M0 44C140 96 290 18 465 56C595 85 675 40 720 22V0H0V44Z" />
+                </svg>
+                <div class="spk-receipt-amount-inner">
+                    <span class="spk-receipt-amount-label" id="ppAmountLabel">Giá trị thanh toán (VNĐ)</span>
+                    <div class="spk-receipt-amount-vnd" id="ppAmountVndDisplay">0đ</div>
+                    <div class="spk-receipt-amount-usd-pill" id="ppAmountUsdDisplay">Thực thu PayPal: 0.00 USD</div>
                 </div>
+            </section>
 
-                <div id="ppActionRow" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-                    <a href="/Lookup" class="btn btn-secondary">Tra cứu vé &amp; Lịch đặt</a>
+            <!-- Structured 2-Column Transaction Details Card -->
+            <section class="spk-receipt-details-card" id="ppMetaSummary" style="display:none;" aria-label="Chi tiết giao dịch">
+                <div class="spk-receipt-details-head">
+                    <div class="spk-receipt-details-heading">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#15803D;" aria-hidden="true">
+                            <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+                            <path d="M14 8H8" />
+                            <path d="M16 12H8" />
+                            <path d="M13 16H8" />
+                        </svg>
+                        <span>Chi tiết giao dịch</span>
+                    </div>
+                    <span class="spk-receipt-verified-badge" id="ppDetailsStatusBadge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="m9 12 2 2 4-4" />
+                        </svg>
+                        <span>Đã thu đủ qua PayPal Sandbox</span>
+                    </span>
                 </div>
-            </div>
-        </div>
+                <div class="spk-receipt-details-grid" id="ppMetaGridHost"></div>
+            </section>
+
+            <!-- Preserved Booking Digital QR Pass -->
+            <section id="ppCompletedTicketWrap" class="spk-receipt-ticket-section" style="display:none;" aria-label="Vé điện tử QR">
+                <div id="ppCompletedTicketHost"></div>
+            </section>
+
+            <!-- Action Buttons -->
+            <footer class="spk-receipt-actions" id="ppActionRow">
+                <a href="/Lookup" class="spk-receipt-btn-secondary">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                    <span>Tra cứu vé &amp; Lịch đặt</span>
+                </a>
+            </footer>
+        </article>
     </div>
 </main>
 
