@@ -577,6 +577,8 @@ public sealed class PayPalPaymentService
             db.TbPayPalTransactions.Add(pendingRecord);
             await db.SaveChangesAsync(cancellationToken);
             if (txA != null) await txA.CommitAsync(cancellationToken);
+            _logger.LogInformation("PayPal attempt {AttemptCode} created for {TargetType}:{TargetCode} (AmountVnd={AmountVnd}, AmountUsd={AmountUsd}, Rate={Rate})",
+                pendingRecord.PublicAttemptCode, pendingRecord.TargetType, pendingRecord.TargetCode, pendingRecord.AmountVnd, pendingRecord.AmountUsd, pendingRecord.ExchangeRateVndPerUsd);
         }
 
         // =========================================================================
@@ -641,6 +643,7 @@ public sealed class PayPalPaymentService
 
                 await db.SaveChangesAsync(cancellationToken);
                 if (txB != null) await txB.CommitAsync(cancellationToken);
+                _logger.LogInformation("PayPal order {PayPalOrderId} created for attempt {AttemptCode}", record.PayPalOrderId, record.PublicAttemptCode);
                 return PayPalCheckoutResult.Ok(record);
             }
 
@@ -650,6 +653,9 @@ public sealed class PayPalPaymentService
             record.LastErrorMessage = errMsg;
             await db.SaveChangesAsync(cancellationToken);
             if (txB != null) await txB.CommitAsync(cancellationToken);
+
+            _logger.LogWarning("PayPal order creation failed for attempt {AttemptCode}: Code={ErrorCode}, Http={HttpStatus}",
+                record.PublicAttemptCode, record.LastErrorCode, apiRes.HttpStatusCode);
 
             int status = apiRes.HttpStatusCode is >= 400 and < 600 ? apiRes.HttpStatusCode : 502;
             return PayPalCheckoutResult.Fail(errMsg, status, record.LastErrorCode, ppTx: record);
@@ -764,6 +770,8 @@ public sealed class PayPalPaymentService
             var (targetBk, targetOrd) = await LoadTargetAsync(db, checkAttempt, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             if (tx != null) await tx.CommitAsync(cancellationToken);
+            _logger.LogInformation("PayPal attempt {AttemptCode} cancelled ({TargetType}:{TargetCode})",
+                checkAttempt.PublicAttemptCode, checkAttempt.TargetType, checkAttempt.TargetCode);
             return PayPalCheckoutResult.Ok(checkAttempt, targetBk, targetOrd);
         }
     }
@@ -890,6 +898,9 @@ public sealed class PayPalPaymentService
             await db.SaveChangesAsync(cancellationToken);
             if (txErr != null) await txErr.CommitAsync(cancellationToken);
 
+            _logger.LogWarning("PayPal refund failed for attempt {AttemptCode}, Capture={CaptureId}: Code={ErrorCode}",
+                ppTx.PublicAttemptCode, ppTx.PayPalCaptureId, rec.LastErrorCode);
+
             return PayPalCheckoutResult.Fail(
                 errMsg,
                 refundRes.HttpStatusCode is >= 400 and < 600 ? refundRes.HttpStatusCode : 502,
@@ -979,6 +990,8 @@ public sealed class PayPalPaymentService
             {
                 return (true, 200, "Webhook verified; no matching local PayPal attempt");
             }
+
+            _logger.LogInformation("PayPal webhook verified ({EventType}) for attempt {AttemptCode}", eventType, attempt.PublicAttemptCode);
 
             await CaptureOrReconcileAttemptInternalAsync(
                 db,
@@ -1192,6 +1205,7 @@ public sealed class PayPalPaymentService
                 if (!authorized)
                 {
                     if (txA != null) await txA.RollbackAsync(cancellationToken);
+                    _logger.LogWarning("PayPal capture/replay authorization denied (403) for attempt {AttemptCode}", ppTx.PublicAttemptCode);
                     return PayPalCheckoutResult.Fail("Bạn không có quyền xác nhận giao dịch thanh toán này.", 403, "FORBIDDEN");
                 }
             }
@@ -1202,6 +1216,8 @@ public sealed class PayPalPaymentService
                 var ledger0 = await db.TbPaymentTransactions.AsNoTracking()
                     .FirstOrDefaultAsync(t => t.TransactionId == ppTx.LedgerTransactionId.Value, cancellationToken);
                 if (txA != null) await txA.CommitAsync(cancellationToken);
+                _logger.LogInformation("PayPal completed receipt replay for attempt {AttemptCode} ({TargetType}:{TargetCode})",
+                    ppTx.PublicAttemptCode, ppTx.TargetType, ppTx.TargetCode);
                 return PayPalCheckoutResult.Ok(ppTx, bk0, ord0, ledger0, replay: true);
             }
 
@@ -1209,6 +1225,8 @@ public sealed class PayPalPaymentService
             {
                 var (bkR, ordR) = await LoadTargetAsync(db, ppTx, cancellationToken);
                 if (txA != null) await txA.CommitAsync(cancellationToken);
+                _logger.LogInformation("PayPal refunded receipt replay for attempt {AttemptCode} (Status={LocalStatus})",
+                    ppTx.PublicAttemptCode, ppTx.LocalStatus);
                 return PayPalCheckoutResult.Ok(ppTx, bkR, ordR, replay: true);
             }
 
@@ -1272,6 +1290,8 @@ public sealed class PayPalPaymentService
             captureIdemKey = ppTx.CaptureIdempotencyKey;
             await db.SaveChangesAsync(cancellationToken);
             if (txA != null) await txA.CommitAsync(cancellationToken);
+            _logger.LogInformation("PayPal capture initiated for attempt {AttemptCode} (PayPalOrderId={PayPalOrderId}, Target={TargetType}:{TargetCode})",
+                ppTx.PublicAttemptCode, ppTx.PayPalOrderId, ppTx.TargetType, ppTx.TargetCode);
         }
 
         // =========================================================================
@@ -1389,6 +1409,17 @@ public sealed class PayPalPaymentService
             await db.SaveChangesAsync(cancellationToken);
             if (txAbort != null) await txAbort.CommitAsync(cancellationToken);
 
+            if (rec.LocalStatus == "CaptureFailed")
+            {
+                _logger.LogError("PayPal capture failed for attempt {AttemptCode} ({TargetType}:{TargetCode}): Code={ErrorCode}, Http={HttpStatus}",
+                    rec.PublicAttemptCode, rec.TargetType, rec.TargetCode, abortCode, abortHttp);
+            }
+            else
+            {
+                _logger.LogWarning("PayPal attempt {AttemptCode} requires reconciliation/approval (Status={LocalStatus}, Code={ErrorCode})",
+                    rec.PublicAttemptCode, rec.LocalStatus, abortCode);
+            }
+
             return PayPalCheckoutResult.Fail(
                 abortMsg ?? "Chưa thể hoàn tất thu tiền PayPal.",
                 abortHttp,
@@ -1415,6 +1446,9 @@ public sealed class PayPalPaymentService
             rec.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
             if (txMismatch != null) await txMismatch.CommitAsync(cancellationToken);
+
+            _logger.LogError("PayPal capture amount mismatch for attempt {AttemptCode}: Captured={CapturedUsd} {CapturedCurrency}, Expected={ExpectedUsd} {ExpectedCurrency}",
+                rec.PublicAttemptCode, finalSnap.AmountUsd, finalSnap.CurrencyCode, rec.AmountUsd, rec.CurrencyCode);
 
             return PayPalCheckoutResult.Fail(rec.LastErrorMessage, 422, "PAYPAL_CAPTURE_MISMATCH", needsReconciliation: true, ppTx: rec);
         }
@@ -1512,6 +1546,8 @@ public sealed class PayPalPaymentService
                 savedRecord.LocalStatus = "Completed";
                 await db.SaveChangesAsync(cancellationToken);
                 if (txB != null) await txB.CommitAsync(cancellationToken);
+                _logger.LogInformation("PayPal capture completed for attempt {AttemptCode} ({TargetType}:{TargetCode}), CaptureId={CaptureId}, LedgerTxId={LedgerTxId}, AmountUsd={AmountUsd}",
+                    savedRecord.PublicAttemptCode, savedRecord.TargetType, savedRecord.TargetCode, savedRecord.PayPalCaptureId, savedRecord.LedgerTransactionId, savedRecord.AmountUsd);
                 return PayPalCheckoutResult.Ok(savedRecord, finalBooking, finalOrder, postedLedgerTx);
             }
 
@@ -1524,6 +1560,8 @@ public sealed class PayPalPaymentService
             savedRecord.RefundIdempotencyKey ??= $"comp-rfd-{savedRecord.PublicAttemptCode}";
             await db.SaveChangesAsync(cancellationToken);
             if (txB != null) await txB.CommitAsync(cancellationToken);
+            _logger.LogWarning("PayPal attempt {AttemptCode} ({TargetType}:{TargetCode}) captured after eligibility loss ({Code}); initiating compensation refund",
+                savedRecord.PublicAttemptCode, savedRecord.TargetType, savedRecord.TargetCode, eligCode);
         }
 
         // =========================================================================
@@ -1579,6 +1617,9 @@ public sealed class PayPalPaymentService
             recFail.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
             if (txCompFail != null) await txCompFail.CommitAsync(cancellationToken);
+
+            _logger.LogError("PayPal compensation refund failed for attempt {AttemptCode}, CaptureId={CaptureId}: Code={ErrorCode}",
+                recFail.PublicAttemptCode, recFail.PayPalCaptureId, recFail.LastErrorCode);
 
             return PayPalCheckoutResult.Fail(
                 $"{compensationReason} Tuy nhiên hoàn tiền tự động PayPal gặp sự cố tạm thời và đã được đưa vào hàng đợi đối soát hoàn tiền.",
@@ -1660,6 +1701,9 @@ public sealed class PayPalPaymentService
         record.CompensationRefundLedgerTxId = refundLedgerRow?.TransactionId;
         await db.SaveChangesAsync(cancellationToken);
         if (tx != null) await tx.CommitAsync(cancellationToken);
+
+        _logger.LogInformation("PayPal refund completed for attempt {AttemptCode} ({TargetType}:{TargetCode}), RefundId={RefundId}, LedgerTxId={LedgerTxId}, Compensation={IsComp}",
+            record.PublicAttemptCode, record.TargetType, record.TargetCode, record.PayPalRefundId, record.CompensationRefundLedgerTxId, isCompensationAfterExpiry);
 
         return PayPalCheckoutResult.Ok(record, bk, ord, refundLedgerRow);
     }

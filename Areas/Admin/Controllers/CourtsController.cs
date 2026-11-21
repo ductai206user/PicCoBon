@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PickleballClub.Controllers;
 using PickleballClub.Models;
 using PickleballClub.Utilities;
@@ -14,10 +16,12 @@ namespace PickleballClub.Areas.Admin.Controllers;
 public class CourtsController : Controller
 {
     private readonly PickleballContext _context;
+    private readonly ILogger<CourtsController> _logger;
 
-    public CourtsController(PickleballContext context)
+    public CourtsController(PickleballContext context, ILogger<CourtsController>? logger = null)
     {
         _context = context;
+        _logger = logger ?? NullLogger<CourtsController>.Instance;
     }
 
     public async Task<IActionResult> Index()
@@ -63,6 +67,8 @@ public class CourtsController : Controller
             tbCourt.Image = ApiDbController.NormalizeCourtImageUrl(tbCourt.Image, tbCourt.CourtType);
             _context.Add(tbCourt);
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Admin created court CourtId={CourtId} (Type={CourtType}, BasePrice={BasePrice}, Actor={Actor})",
+                tbCourt.CourtId, tbCourt.CourtType, tbCourt.BasePrice, Function._Username);
             return RedirectToAction(nameof(Index));
         }
         return View(tbCourt);
@@ -112,6 +118,8 @@ public class CourtsController : Controller
             existing.IsActive = tbCourt.IsActive;
 
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Admin updated court CourtId={CourtId} (BasePrice={BasePrice}, IsActive={IsActive}, Actor={Actor})",
+                existing.CourtId, existing.BasePrice, existing.IsActive, Function._Username);
             return RedirectToAction(nameof(Index));
         }
         return View(tbCourt);
@@ -126,6 +134,8 @@ public class CourtsController : Controller
         {
             court.IsActive = !court.IsActive;
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Admin toggled court CourtId={CourtId} (IsActive={IsActive}, Actor={Actor})",
+                court.CourtId, court.IsActive, Function._Username);
         }
         return RedirectToAction(nameof(Index));
     }

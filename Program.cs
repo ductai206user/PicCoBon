@@ -14,14 +14,31 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using PickleballClub.Configuration;
+using PickleballClub.Logging;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
 
 var builder = WebApplication.CreateBuilder(args);
 
-bool isDevOrTesting = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing");
+bool isSqlDebugRequested =
+    !builder.Environment.IsProduction() &&
+    (builder.Environment.IsEnvironment("SqlDebug") ||
+     args.Contains("--sql-debug", StringComparer.OrdinalIgnoreCase) ||
+     string.Equals(Environment.GetEnvironmentVariable("SPIKE_SQL_DEBUG"), "true", StringComparison.OrdinalIgnoreCase));
+
+if (isSqlDebugRequested && !builder.Environment.IsEnvironment("SqlDebug"))
+{
+    builder.Configuration.AddJsonFile("appsettings.SqlDebug.json", optional: true, reloadOnChange: true);
+}
+
+builder.Logging.AddConsoleFormatter<CleanSpikeConsoleFormatter, CleanSpikeConsoleFormatterOptions>();
+
+bool isDevOrTesting = builder.Environment.IsDevelopment() ||
+                      builder.Environment.IsEnvironment("SqlDebug") ||
+                      builder.Environment.IsEnvironment("Testing");
 var cookieSecurePolicy = isDevOrTesting ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 
 // Add services to the container.
@@ -95,6 +112,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             var acc = await db.TbAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.AccountId == accountId);
             if (acc == null || !acc.IsActive)
             {
+                var authLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Auth");
+                authLogger.LogWarning("Session revoked for AccountId={AccountId}: Reason={Reason}", accountId, acc == null ? "AccountMissing" : "AccountInactive");
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 return;
@@ -104,6 +123,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             if (!string.IsNullOrEmpty(acc.SecurityStamp) &&
                 !string.Equals(acc.SecurityStamp, tokenStamp, StringComparison.Ordinal))
             {
+                var authLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Auth");
+                authLogger.LogWarning("Session rejected due to rotated SecurityStamp for AccountId={AccountId}", accountId);
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 return;
@@ -116,6 +137,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         {
             if (context.Request.Path.StartsWithSegments("/api"))
             {
+                var authLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Auth");
+                authLogger.LogWarning("Unauthenticated API request {Method} {Path} rejected (401)", context.Request.Method, context.Request.Path.Value);
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return Task.CompletedTask;
             }
@@ -130,6 +153,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
         options.Events.OnRedirectToAccessDenied = context =>
         {
+            var authLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Auth");
+            string actor = context.HttpContext.User?.Identity?.Name ?? "anonymous";
+            authLogger.LogWarning("Authorization denied (403) for Actor={Actor} on {Method} {Path}",
+                CorrelationContext.MaskIdentifier(actor), context.Request.Method, context.Request.Path.Value);
+
             if (context.Request.Path.StartsWithSegments("/api"))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -152,6 +180,8 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
+        var rateLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Security");
+        rateLogger.LogWarning("Rate limit exceeded (429) on {Method} {Path}", context.HttpContext.Request.Method, context.HttpContext.Request.Path.Value);
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.HttpContext.Response.Headers.RetryAfter = "60";
         context.HttpContext.Response.ContentType = "application/json; charset=utf-8";
@@ -278,7 +308,8 @@ if (args.Contains("--migrate", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
-if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Database:AutoMigrateInDevelopment", true))
+if ((app.Environment.IsDevelopment() || app.Environment.IsEnvironment("SqlDebug")) &&
+    app.Configuration.GetValue("Database:AutoMigrateInDevelopment", true))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
@@ -288,11 +319,39 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Database:Auto
     }
 }
 
-if (!app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("SqlDebug"))
 {
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
+
+// Correlation ID & Unhandled API/MVC Diagnostics Middleware
+app.Use(async (context, next) =>
+{
+    string? incomingCid = context.Request.Headers[CorrelationContext.HeaderName].FirstOrDefault();
+    string correlationId = CorrelationContext.ResolveSafeId(incomingCid);
+    context.TraceIdentifier = correlationId;
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers[CorrelationContext.HeaderName] = correlationId;
+        return Task.CompletedTask;
+    });
+
+    var reqLogger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("SpikeOS.Request");
+    using (CorrelationContext.Push(correlationId))
+    using (reqLogger.BeginScope(new Dictionary<string, object?> { ["CorrelationId"] = correlationId }))
+    {
+        try
+        {
+            await next();
+        }
+        catch (Exception ex)
+        {
+            reqLogger.LogError(ex, "Unhandled exception processing {Method} {Path}", context.Request.Method, context.Request.Path.Value);
+            throw;
+        }
+    }
+});
 
 // Security Headers Middleware (P2-09), Legacy Cookie Cleanup (P0-02) & V4-B1 CSRF Error Formatting
 app.Use(async (context, next) =>
@@ -363,6 +422,8 @@ app.Use(async (context, next) =>
         }
         catch (Microsoft.AspNetCore.Antiforgery.AntiforgeryValidationException)
         {
+            var secLogger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Security");
+            secLogger.LogWarning("CSRF token validation failed on {Method} {Path}", context.Request.Method, context.Request.Path.Value);
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             context.Response.Headers["X-Csrf-Error"] = "CSRF_TOKEN_INVALID";
             context.Response.ContentType = "application/json; charset=utf-8";
@@ -470,6 +531,50 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    using var bootScope = app.Services.CreateScope();
+    var bootLogger = bootScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var dbLogger = bootScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Microsoft.EntityFrameworkCore.SpikeStartup");
+    var payPalLogger = bootScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Services.PayPalPaymentService");
+
+    bootLogger.LogInformation("Spike OS initialized (Environment={Environment}, SqlDebug={SqlDebug})",
+        app.Environment.EnvironmentName, isSqlDebugRequested);
+
+    try
+    {
+        var db = bootScope.ServiceProvider.GetRequiredService<PickleballContext>();
+        if (db.Database.IsRelational())
+        {
+            if (await db.Database.CanConnectAsync())
+            {
+                dbLogger.LogInformation("Database connection verified");
+            }
+            else
+            {
+                dbLogger.LogWarning("Database connection unreachable at startup");
+            }
+        }
+
+        var payPalService = bootScope.ServiceProvider.GetRequiredService<PayPalPaymentService>();
+        var readiness = await payPalService.ValidateCheckoutReadinessAsync(db);
+        if (readiness.IsReady)
+        {
+            var ppOpts = bootScope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayPalOptions>>().Value;
+            payPalLogger.LogInformation("PayPal gateway ready (Env={PayPalEnv}, Currency={Currency}, Rate={Rate})",
+                ppOpts.Environment, ppOpts.Currency, ppOpts.VndPerUsd);
+        }
+        else
+        {
+            payPalLogger.LogWarning("PayPal gateway inactive at startup: Code={ErrorCode}", readiness.ErrorCode);
+        }
+    }
+    catch (Exception ex)
+    {
+        bootLogger.LogError(ex, "Startup readiness probe encountered an error");
+    }
+}
+
 app.Run();
 
 public sealed class CsrfFailureResultFilter : IAsyncAlwaysRunResultFilter, IOrderedFilter
@@ -480,6 +585,8 @@ public sealed class CsrfFailureResultFilter : IAsyncAlwaysRunResultFilter, IOrde
     {
         if (context.Result is IAntiforgeryValidationFailedResult)
         {
+            var secLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Security");
+            secLogger.LogWarning("Antiforgery filter blocked {Method} {Path}", context.HttpContext.Request.Method, context.HttpContext.Request.Path.Value);
             context.HttpContext.Response.Headers["X-Csrf-Error"] = "CSRF_TOKEN_INVALID";
             context.Result = new JsonResult(new
             {

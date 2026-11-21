@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PickleballClub.Models;
 
 namespace PickleballClub.Services;
@@ -92,15 +94,18 @@ public class BookingService
     private readonly PricingService _pricingService;
     private readonly QrTokenService _qrTokenService;
     private readonly ClubSettingsService _settingsService;
+    private readonly ILogger<BookingService> _logger;
 
     public BookingService(
         PricingService pricingService,
         QrTokenService qrTokenService,
-        ClubSettingsService settingsService)
+        ClubSettingsService settingsService,
+        ILogger<BookingService>? logger = null)
     {
         _pricingService = pricingService;
         _qrTokenService = qrTokenService;
         _settingsService = settingsService;
+        _logger = logger ?? NullLogger<BookingService>.Instance;
     }
 
     public static DateTime GetVietnamNow()
@@ -606,6 +611,9 @@ public class BookingService
                 await transaction.CommitAsync();
             }
 
+            _logger.LogInformation("Booking {BookingCode} created (CourtId={CourtId}, Date={Date}, Time={StartTime}, Dur={Duration}m, Status={Status}, Method={Method}, DueVnd={AmountDue})",
+                bookingCode, court.CourtId, dateIso, booking.StartTime, booking.Duration, booking.Status, booking.PaymentMethod, booking.AmountDue);
+
             return BookingOperationResult.Ok(booking, quote, guestRawToken);
         }
         catch (DbUpdateException)
@@ -617,6 +625,7 @@ public class BookingService
                 var afterConflict = await IdempotencyService.CheckAsync(context, cleanIdemKey, idemScope, idemActor, idemTarget, idemPayload);
                 if (afterConflict.Status == IdempotencyStatus.Conflict)
                 {
+                    _logger.LogWarning("Booking creation idempotency conflict detected");
                     return BookingOperationResult.Fail(afterConflict.ConflictMessage!, 409, errorCode: IdempotencyService.ConflictErrorCode);
                 }
                 if (afterConflict.Status == IdempotencyStatus.Replay && afterConflict.ExistingRecord?.ResultEntityId != null)
@@ -624,10 +633,15 @@ public class BookingService
                     var replayed = await context.TbBookings.AsNoTracking()
                         .FirstOrDefaultAsync(b => b.BookingId == afterConflict.ExistingRecord.ResultEntityId.Value);
                     if (replayed != null)
+                    {
+                        _logger.LogInformation("Booking {BookingCode} idempotency replay returned", replayed.BookingCode);
                         return BookingOperationResult.Ok(replayed, replay: true);
+                    }
                 }
             }
 
+            _logger.LogWarning("Booking creation rejected due to slot/concurrency conflict (CourtId={CourtId}, Date={Date}, Time={StartTime})",
+                input.CourtId, input.BookingDate, input.StartTime);
             return BookingOperationResult.Fail("Khung giờ này vừa được người chơi khác đặt thành công. Vui lòng chọn giờ khác!", 409);
         }
     }
@@ -769,6 +783,8 @@ public class BookingService
             });
             await context.SaveChangesAsync();
             if (tx != null) await tx.CommitAsync();
+            _logger.LogWarning("Booking {BookingCode} expired before approval (HoldExpiresAtUtc={HoldExpiresAtUtc:O})",
+                booking.BookingCode, booking.HoldExpiresAtUtc);
             return BookingOperationResult.Fail(
                 "Đơn đặt sân đã hết thời gian giữ chỗ tạm (TTL) nên không thể duyệt.",
                 409,
@@ -783,6 +799,7 @@ public class BookingService
         if (hasConflict)
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Booking {BookingCode} approval rejected due to slot conflict", booking.BookingCode);
             return BookingOperationResult.Fail(reason, 409, errorCode: "SLOT_CONFLICT");
         }
 
@@ -807,6 +824,8 @@ public class BookingService
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Booking {BookingCode} approved (CourtId={CourtId}, Date={Date}, Time={StartTime}, Actor={Actor})",
+            booking.BookingCode, booking.CourtId, booking.BookingDate, booking.StartTime, actorUsername ?? "system");
         return BookingOperationResult.Ok(booking);
     }
 
@@ -852,6 +871,7 @@ public class BookingService
             !string.Equals(booking.CheckInToken, trimmed, StringComparison.Ordinal))
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=RevokedOrMismatchedQrToken", booking.BookingCode);
             return BookingOperationResult.Fail("Mã QR đã bị thu hồi hoặc không khớp với vé trên hệ thống.", 400);
         }
 
@@ -859,6 +879,7 @@ public class BookingService
         if (booking.Status == "playing")
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=AlreadyCheckedIn", booking.BookingCode);
             return BookingOperationResult.Fail($"Vé {booking.BookingCode} đã được Check-in nhận sân trước đó (từ chối quét lặp lại).", 409);
         }
 
@@ -866,30 +887,35 @@ public class BookingService
         if (booking.Status == "pending")
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=BookingPendingApproval", booking.BookingCode);
             return BookingOperationResult.Fail($"Vé {booking.BookingCode} đang ở trạng thái Chờ duyệt (pending). Nhân viên cần duyệt vé trước khi Check-in!", 409);
         }
 
         if (booking.Status is "rejected" or "cancelled")
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=Status_{Status}", booking.BookingCode, booking.Status);
             return BookingOperationResult.Fail("Đơn đặt sân này đã bị hủy, không thể Check-in.", 409);
         }
 
         if (booking.Status is "expired" or "no_show")
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=Status_{Status}", booking.BookingCode, booking.Status);
             return BookingOperationResult.Fail($"Đơn đặt sân này đã quá hạn ({booking.Status}), không thể Check-in.", 409);
         }
 
         if (booking.Status == "completed")
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=AlreadyCompleted", booking.BookingCode);
             return BookingOperationResult.Fail("Ca thi đấu của mã vé này đã kết thúc.", 409);
         }
 
         if (booking.Status != "approved" && booking.Status != "confirmed")
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=InvalidStatus_{Status}", booking.BookingCode, booking.Status);
             return BookingOperationResult.Fail($"Trạng thái vé '{booking.Status}' không hợp lệ để Check-in.", 409);
         }
 
@@ -901,6 +927,8 @@ public class BookingService
         if (!string.Equals(booking.BookingDate, todayIso, StringComparison.Ordinal))
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=DateMismatch (BookingDate={BookingDate}, Today={Today})",
+                booking.BookingCode, booking.BookingDate, todayIso);
             return BookingOperationResult.Fail(
                 $"Vé này có ngày thi đấu là {booking.BookingDate} (hôm nay là {todayIso}), chưa đến hoặc đã qua ngày nhận sân.", 422);
         }
@@ -914,6 +942,7 @@ public class BookingService
             if (nowMins < earliestCheckIn)
             {
                 if (tx != null) await tx.RollbackAsync();
+                _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=TooEarly", booking.BookingCode);
                 return BookingOperationResult.Fail(
                     $"Chưa tới khung giờ nhận sân. CLB hỗ trợ Check-in tối đa {settings.CheckInEarlyMinutes} phút trước giờ bắt đầu ({booking.StartTime}).", 422);
             }
@@ -921,6 +950,7 @@ public class BookingService
             if (nowMins >= endMins)
             {
                 if (tx != null) await tx.RollbackAsync();
+                _logger.LogWarning("Check-in rejected for {BookingCode}: Reason=SlotEnded", booking.BookingCode);
                 return BookingOperationResult.Fail(
                     $"Khung giờ của vé ({booking.StartTime}–{PricingService.MinutesToTime(endMins)}) đã kết thúc, không thể Check-in.", 422);
             }
@@ -943,6 +973,8 @@ public class BookingService
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Booking {BookingCode} check-in completed (CourtId={CourtId}, Method={CheckInMethod}, Actor={Actor})",
+            booking.BookingCode, booking.CourtId, trimmed.StartsWith("SPK1.", StringComparison.Ordinal) ? "QR" : "Code", actorUsername ?? "staff");
         return BookingOperationResult.Ok(booking);
     }
 
@@ -1036,6 +1068,7 @@ public class BookingService
             }
             if (booking.PaidAmount > 0)
             {
+                _logger.LogWarning("Booking {BookingCode} cancel rejected because PaidAmount={PaidAmount}", booking.BookingCode, booking.PaidAmount);
                 return BookingOperationResult.Fail("Đơn đã thu tiền. Vui lòng thực hiện giao dịch Hoàn tiền (Refund) trong sổ quỹ trước khi hủy đơn.", 409, errorCode: "BOOKING_HAS_PAYMENT");
             }
         }
@@ -1243,6 +1276,8 @@ public class BookingService
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Booking {BookingCode} {Status} (LinkedOrdersCancelled={LinkedOrders}, Actor={Actor})",
+            booking.BookingCode, booking.Status, linkedOrders.Count, actorUsername ?? (isStaffOrAdmin ? "staff" : "customer"));
         return BookingOperationResult.Ok(booking);
     }
 
@@ -1380,6 +1415,8 @@ public class BookingService
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Booking {BookingCode} extended to {NewDuration}m (AmountDue={AmountDue})",
+            booking.BookingCode, newDuration, booking.AmountDue);
         return BookingOperationResult.Ok(booking, quote);
     }
 
@@ -1422,6 +1459,8 @@ public class BookingService
         if (hasConflict)
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Booking {BookingCode} court transfer to CourtId={TargetCourtId} failed due to slot conflict",
+                booking.BookingCode, targetCourtId);
             return BookingOperationResult.Fail($"Sân chuyển tới đang bận: {reason}", 409);
         }
 
@@ -1459,6 +1498,8 @@ public class BookingService
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Booking {BookingCode} court transferred to CourtId={TargetCourtId} (AmountDue={AmountDue})",
+            booking.BookingCode, targetCourtId, booking.AmountDue);
         return BookingOperationResult.Ok(booking, quote);
     }
 
@@ -1634,6 +1675,8 @@ WHERE ProductId = {0}",
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Booking {BookingCode} POS item updated (ProductId={ProductId}, Delta={Delta}, PosTotal={PosTotal})",
+            booking.BookingCode, productId, quantityDelta, posTotal);
         return BookingOperationResult.Ok(booking);
     }
 
@@ -1683,6 +1726,8 @@ WHERE ProductId = {0}",
         });
 
         await context.SaveChangesAsync();
+        _logger.LogInformation("Booking {BookingCode} session completed (Paid={PaidAmount}/{AmountDue}, PaymentStatus={PaymentStatus})",
+            booking.BookingCode, booking.PaidAmount, booking.AmountDue, booking.PaymentStatus);
         return BookingOperationResult.Ok(booking);
     }
 
@@ -1770,6 +1815,7 @@ WHERE ProductId = {0}",
             if (!matchesTx)
             {
                 if (tx != null) await tx.RollbackAsync();
+                _logger.LogWarning("Booking {BookingCode} duplicate/conflicting payment attempt rejected", booking.BookingCode);
                 return BookingOperationResult.Fail(
                     "Khóa IdempotencyKey đã được sử dụng cho một giao dịch thu tiền khác (khác đơn, số tiền hoặc phương thức).",
                     409,
@@ -1777,6 +1823,8 @@ WHERE ProductId = {0}",
             }
 
             if (tx != null) await tx.CommitAsync();
+            _logger.LogInformation("Booking {BookingCode} payment idempotency replay returned (TxId={TxId})",
+                booking.BookingCode, existingTx.TransactionId);
             return BookingOperationResult.Ok(booking, tx: existingTx, replay: true);
         }
 
@@ -1784,6 +1832,8 @@ WHERE ProductId = {0}",
         {
             var replayedTx = await context.TbPaymentTransactions.FirstOrDefaultAsync(t => t.TransactionId == idemCheck.ExistingRecord.ResultEntityId.Value);
             if (tx != null) await tx.CommitAsync();
+            _logger.LogInformation("Booking {BookingCode} payment idempotency replay returned (TxId={TxId})",
+                booking.BookingCode, replayedTx?.TransactionId);
             return BookingOperationResult.Ok(booking, tx: replayedTx, replay: true);
         }
 
@@ -1866,6 +1916,16 @@ WHERE ProductId = {0}",
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        if (updatedNetPaid < amountDue)
+        {
+            _logger.LogInformation("Booking {BookingCode} partial payment recorded: Amount={Amount} VND, Paid={Paid}/{Due}, Method={Method}, TxId={TxId}",
+                booking.BookingCode, amount, updatedNetPaid, amountDue, cleanMethod, paymentRow.TransactionId);
+        }
+        else
+        {
+            _logger.LogInformation("Booking {BookingCode} payment recorded: Amount={Amount} VND, Method={Method}, TxId={TxId}",
+                booking.BookingCode, amount, cleanMethod, paymentRow.TransactionId);
+        }
         return BookingOperationResult.Ok(booking, tx: paymentRow);
     }
 
@@ -2001,6 +2061,8 @@ WHERE ProductId = {0}",
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Booking {BookingCode} refund processed: Amount={RefundAmount} VND, Method={Method}, NetPaidAfter={NetPaid}, TxId={TxId}",
+            booking.BookingCode, refundAmount, cleanMethod, updatedNetPaid, refundRow.TransactionId);
         return BookingOperationResult.Ok(booking, tx: refundRow);
     }
 
@@ -2209,6 +2271,7 @@ WHERE ProductId = {0}",
                     Details = $"Date={b.BookingDate}, Start={b.StartTime}, HoldExpiresAtUtc={b.HoldExpiresAtUtc:O}",
                     CreatedAt = vnNow
                 });
+                _logger.LogInformation("Booking {BookingCode} hold expired (Date={Date}, Time={StartTime})", b.BookingCode, b.BookingDate, b.StartTime);
                 updated++;
             }
             else if (b.Status == "approved" && b.CheckedInAt == null && endDt.HasValue && vnNow >= endDt.Value)
@@ -2225,6 +2288,7 @@ WHERE ProductId = {0}",
                     Details = $"Date={b.BookingDate}, Start={b.StartTime}",
                     CreatedAt = vnNow
                 });
+                _logger.LogInformation("Booking {BookingCode} marked no_show (Date={Date}, Time={StartTime})", b.BookingCode, b.BookingDate, b.StartTime);
                 updated++;
             }
         }

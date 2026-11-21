@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
@@ -18,11 +20,16 @@ public class ProductsController : Controller
 {
     private readonly PickleballContext _context;
     private readonly ProductImageService _imageService;
+    private readonly ILogger<ProductsController> _logger;
 
-    public ProductsController(PickleballContext context, ProductImageService imageService)
+    public ProductsController(
+        PickleballContext context,
+        ProductImageService imageService,
+        ILogger<ProductsController>? logger = null)
     {
         _context = context;
         _imageService = imageService;
+        _logger = logger ?? NullLogger<ProductsController>.Instance;
     }
 
     public async Task<IActionResult> Index()
@@ -84,6 +91,8 @@ public class ProductsController : Controller
             {
                 _context.Add(tbProduct);
                 await _context.SaveChangesAsync();
+                _logger.LogInformation("Admin created product ProductId={ProductId} (Price={Price}, Stock={Stock}, Actor={Actor})",
+                    tbProduct.ProductId, tbProduct.Price, tbProduct.UnitInStock, GetCurrentActorUsername());
             }
             catch
             {
@@ -195,6 +204,8 @@ public class ProductsController : Controller
             try
             {
                 await _context.SaveChangesAsync();
+                _logger.LogInformation("Admin updated product ProductId={ProductId} (Price={Price}, Stock={Stock}, Actor={Actor})",
+                    existing.ProductId, existing.Price, existing.UnitInStock, GetCurrentActorUsername());
             }
             catch
             {
@@ -259,6 +270,8 @@ public class ProductsController : Controller
             }
 
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Admin {Action} product ProductId={ProductId} (Actor={Actor})",
+                physicallyRemoved ? "deleted" : "deactivated", id, GetCurrentActorUsername());
 
             if (physicallyRemoved && !string.IsNullOrWhiteSpace(oldImage))
             {

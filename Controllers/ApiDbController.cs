@@ -17,8 +17,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PickleballClub.Configuration;
+using PickleballClub.Logging;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
@@ -39,6 +42,7 @@ public class ApiDbController : ControllerBase
     private readonly PasswordService _passwordService;
     private readonly IAntiforgery _antiforgery;
     private readonly IDataProtector _guestBookingProtector;
+    private readonly ILogger<ApiDbController> _logger;
 
     public ApiDbController(
         PickleballContext context,
@@ -49,7 +53,8 @@ public class ApiDbController : ControllerBase
         ClubSettingsService settingsService,
         PasswordService passwordService,
         IAntiforgery antiforgery,
-        IDataProtectionProvider dataProtectionProvider)
+        IDataProtectionProvider dataProtectionProvider,
+        ILogger<ApiDbController>? logger = null)
     {
         _context = context;
         _bookingService = bookingService;
@@ -60,6 +65,7 @@ public class ApiDbController : ControllerBase
         _passwordService = passwordService;
         _antiforgery = antiforgery;
         _guestBookingProtector = dataProtectionProvider.CreateProtector("Spike.GuestBookingRecovery.v1");
+        _logger = logger ?? NullLogger<ApiDbController>.Instance;
     }
 
     public static string FormatIconHtml(string? rawIcon) =>
@@ -730,6 +736,8 @@ public class ApiDbController : ControllerBase
 
         await _context.SaveChangesAsync();
         var refreshed = await _settingsService.GetSettingsAsync(_context);
+        _logger.LogInformation("Admin updated CMS settings (Keys={Keys}, PricingVersion={PricingVersion}, Actor={Actor})",
+            string.Join(',', updates.Keys), refreshed.PricingVersion, actor);
 
         return Ok(new
         {
@@ -1373,6 +1381,7 @@ public class ApiDbController : ControllerBase
                 }
                 catch
                 {
+                    _logger.LogWarning("QR scanner decode rejected invalid base64 payload (Actor={Actor})", Function._Username);
                     return BadRequest(new { ok = false, error = "Dữ liệu ảnh Base64 không hợp lệ." });
                 }
             }
@@ -1385,6 +1394,7 @@ public class ApiDbController : ControllerBase
 
         if (!QrTokenService.TryDecodeQrImage(imageBytes, out string decodedText, out string decodeErr))
         {
+            _logger.LogWarning("QR scanner image decode failed (Bytes={ByteCount}, Actor={Actor})", imageBytes.Length, Function._Username);
             return UnprocessableEntity(new { ok = false, error = decodeErr });
         }
 
@@ -1668,6 +1678,9 @@ public class ApiDbController : ControllerBase
             return StatusCode(res.StatusCode, new { ok = false, error = res.ErrorMessage });
         }
 
+        _logger.LogInformation("Court lock created: LockCode={LockCode}, CourtId={CourtId}, Date={Date}, Actor={Actor}",
+            res.Lock.LockCode, res.Lock.CourtId, res.Lock.LockDate, Function._Username);
+
         return Ok(new
         {
             ok = true,
@@ -1706,6 +1719,8 @@ public class ApiDbController : ControllerBase
             CreatedAt = BookingService.GetVietnamNow()
         });
         await _context.SaveChangesAsync();
+        _logger.LogInformation("Court lock deleted: LockCode={LockCode}, CourtId={CourtId}, Actor={Actor}",
+            lockCode, lockEntry.CourtId, Function._Username);
         return Ok(new { ok = true });
     }
 
@@ -1738,17 +1753,20 @@ public class ApiDbController : ControllerBase
 
         if (account == null)
         {
+            _logger.LogWarning("API login failed for Identifier={Identifier}: Reason=AccountNotFound", CorrelationContext.MaskIdentifier(identifier));
             return Unauthorized(new { ok = false, error = "Tài khoản hoặc mật khẩu không chính xác." });
         }
 
         var verifyResult = _passwordService.VerifyPassword(account, account.Password, password, out string? upgradedHash);
         if (verifyResult == PasswordVerificationResult.Failed)
         {
+            _logger.LogWarning("API login failed for AccountId={AccountId}: Reason=InvalidPassword", account.AccountId);
             return Unauthorized(new { ok = false, error = "Tài khoản hoặc mật khẩu không chính xác." });
         }
 
         if (!account.IsActive)
         {
+            _logger.LogWarning("API login blocked for AccountId={AccountId}: Reason=AccountLocked", account.AccountId);
             return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, error = "Tài khoản của bạn hiện đang bị tạm khóa." });
         }
 
@@ -1766,6 +1784,7 @@ public class ApiDbController : ControllerBase
         await _context.SaveChangesAsync();
 
         await Function.SignInAccountAsync(HttpContext, account);
+        _logger.LogInformation("API login succeeded (AccountId={AccountId}, RoleId={RoleId})", account.AccountId, account.RoleId);
         var csrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
 
         bool isAdmin = account.RoleId == 1;
@@ -1816,6 +1835,7 @@ public class ApiDbController : ControllerBase
         var verify = _passwordService.VerifyPassword(account, account.Password, currentPassword, out _);
         if (verify == PasswordVerificationResult.Failed)
         {
+            _logger.LogWarning("Password change rejected for AccountId={AccountId}: Reason=WrongCurrentPassword", accountId);
             return BadRequest(new { ok = false, error = "Mật khẩu hiện tại không chính xác." });
         }
 
@@ -1825,6 +1845,7 @@ public class ApiDbController : ControllerBase
         await _context.SaveChangesAsync();
 
         await Function.SignInAccountAsync(HttpContext, account);
+        _logger.LogInformation("Password changed successfully for AccountId={AccountId}", accountId);
         var csrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
 
         return Ok(new
@@ -1910,6 +1931,7 @@ public class ApiDbController : ControllerBase
         await _context.SaveChangesAsync();
 
         await Function.SignInAccountAsync(HttpContext, newAccount);
+        _logger.LogInformation("New member account registered (AccountId={AccountId})", newAccount.AccountId);
         var csrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
 
         return Ok(new

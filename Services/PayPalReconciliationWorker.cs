@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PickleballClub.Logging;
 using PickleballClub.Models;
 
 namespace PickleballClub.Services;
@@ -31,24 +32,27 @@ public sealed class PayPalReconciliationWorker : BackgroundService
             await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                try
+                using (CorrelationContext.BeginWorkerCycle(_logger, nameof(PayPalReconciliationWorker)))
                 {
-                    using var scope = _scopeFactory.CreateScope();
-                    var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
-                    var payPalService = scope.ServiceProvider.GetRequiredService<PayPalPaymentService>();
-                    int reconciled = await payPalService.ReconcileStaleAttemptsAsync(db, cancellationToken: stoppingToken);
-                    if (reconciled > 0)
+                    try
                     {
-                        _logger.LogInformation("PayPal reconciliation worker processed {Count} attempt(s).", reconciled);
+                        using var scope = _scopeFactory.CreateScope();
+                        var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
+                        var payPalService = scope.ServiceProvider.GetRequiredService<PayPalPaymentService>();
+                        int reconciled = await payPalService.ReconcileStaleAttemptsAsync(db, cancellationToken: stoppingToken);
+                        if (reconciled > 0)
+                        {
+                            _logger.LogInformation("PayPal reconciliation worker processed {Count} attempt(s)", reconciled);
+                        }
                     }
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "PayPal reconciliation worker sweep encountered an error.");
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "PayPal reconciliation worker sweep encountered an error");
+                    }
                 }
             }
         }

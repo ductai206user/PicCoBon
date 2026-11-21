@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using PickleballClub.Logging;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
@@ -24,17 +27,20 @@ public class AccountController : Controller
     private readonly PasswordService _passwordService;
     private readonly PricingService _pricingService;
     private readonly ClubSettingsService _settingsService;
+    private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         PickleballContext context,
         PasswordService passwordService,
         PricingService pricingService,
-        ClubSettingsService settingsService)
+        ClubSettingsService settingsService,
+        ILogger<AccountController>? logger = null)
     {
         _context = context;
         _passwordService = passwordService;
         _pricingService = pricingService;
         _settingsService = settingsService;
+        _logger = logger ?? NullLogger<AccountController>.Instance;
     }
 
     public IActionResult Login()
@@ -68,6 +74,7 @@ public class AccountController : Controller
 
         if (check == null)
         {
+            _logger.LogWarning("Login failed for Identifier={Identifier}: Reason=AccountNotFound", CorrelationContext.MaskIdentifier(u));
             TempData["AuthError"] = "Tài khoản hoặc mật khẩu không chính xác!";
             return RedirectToAction("Login", "Account");
         }
@@ -75,12 +82,14 @@ public class AccountController : Controller
         var verifyResult = _passwordService.VerifyPassword(check, check.Password, password, out string? upgradedHash);
         if (verifyResult == PasswordVerificationResult.Failed)
         {
+            _logger.LogWarning("Login failed for AccountId={AccountId}: Reason=InvalidPassword", check.AccountId);
             TempData["AuthError"] = "Tài khoản hoặc mật khẩu không chính xác!";
             return RedirectToAction("Login", "Account");
         }
 
         if (!check.IsActive)
         {
+            _logger.LogWarning("Login blocked for AccountId={AccountId}: Reason=AccountLocked", check.AccountId);
             TempData["AuthError"] = "Tài khoản của bạn hiện đang bị khóa!";
             return RedirectToAction("Login", "Account");
         }
@@ -99,6 +108,7 @@ public class AccountController : Controller
         await _context.SaveChangesAsync();
 
         await Function.SignInAccountAsync(HttpContext, check);
+        _logger.LogInformation("User signed in via MVC (AccountId={AccountId}, RoleId={RoleId})", check.AccountId, check.RoleId);
 
         if (check.MustChangePassword)
         {

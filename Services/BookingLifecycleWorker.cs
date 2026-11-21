@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PickleballClub.Logging;
 using PickleballClub.Models;
 
 namespace PickleballClub.Services;
@@ -37,21 +38,24 @@ public class BookingLifecycleWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
+            using (CorrelationContext.BeginWorkerCycle(_logger, nameof(BookingLifecycleWorker)))
             {
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
-                var bookingService = scope.ServiceProvider.GetRequiredService<BookingService>();
-
-                int reconciled = await bookingService.ReconcileBookingLifecycleAsync(db);
-                if (reconciled > 0)
+                try
                 {
-                    _logger.LogInformation("BookingLifecycleWorker reconciled {Count} expired/no_show bookings.", reconciled);
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<PickleballContext>();
+                    var bookingService = scope.ServiceProvider.GetRequiredService<BookingService>();
+
+                    int reconciled = await bookingService.ReconcileBookingLifecycleAsync(db);
+                    if (reconciled > 0)
+                    {
+                        _logger.LogInformation("BookingLifecycleWorker reconciled {Count} expired/no_show booking(s)", reconciled);
+                    }
                 }
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogWarning(ex, "BookingLifecycleWorker cycle encountered a transient error.");
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(ex, "BookingLifecycleWorker cycle encountered a transient error");
+                }
             }
 
             try

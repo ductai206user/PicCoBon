@@ -143,6 +143,7 @@ public sealed class PayPalClient : IPayPalClient
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            _logger.LogWarning("PayPal CreateOrder timed out for Attempt={AttemptCode}", request.AttemptCode);
             return new PayPalCreateOrderResponse(false, null, null, null, null, 504, "PAYPAL_TIMEOUT",
                 "Kết nối tới PayPal Sandbox bị quá thời gian khi tạo đơn thanh toán.");
         }
@@ -189,6 +190,7 @@ public sealed class PayPalClient : IPayPalClient
             if (!res.IsSuccessStatusCode)
             {
                 var (ppCode, ppMsg) = ExtractPayPalError(raw, "PAYPAL_GET_ORDER_FAILED");
+                _logger.LogWarning("PayPal GetOrder HTTP {Status} for {PayPalOrderId}: Code={Code}", (int)res.StatusCode, payPalOrderId, ppCode);
                 return new PayPalOrderSnapshot(false, payPalOrderId, null, null, null, null, null, null, null, null,
                     (int)res.StatusCode >= 500, (int)res.StatusCode, ppCode, ppMsg);
             }
@@ -197,6 +199,7 @@ public sealed class PayPalClient : IPayPalClient
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            _logger.LogWarning("PayPal GetOrder timed out for {PayPalOrderId}", payPalOrderId);
             return new PayPalOrderSnapshot(false, payPalOrderId, null, null, null, null, null, null, null, null,
                 true, 504, "PAYPAL_TIMEOUT", "Quá thời gian truy vấn trạng thái đơn PayPal Sandbox.");
         }
@@ -332,6 +335,7 @@ public sealed class PayPalClient : IPayPalClient
             if (!res.IsSuccessStatusCode)
             {
                 var (ppCode, ppMsg) = ExtractPayPalError(raw, "PAYPAL_REFUND_FAILED");
+                _logger.LogWarning("PayPal Refund HTTP {Status} for Capture={CaptureId}: Code={Code}", (int)res.StatusCode, captureId, ppCode);
                 return new PayPalRefundResult(false, null, null, null, null, null,
                     (int)res.StatusCode >= 500, (int)res.StatusCode, ppCode, ppMsg);
             }

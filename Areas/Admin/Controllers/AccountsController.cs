@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
@@ -20,11 +22,16 @@ public class AccountsController : Controller
 
     private readonly PickleballContext _context;
     private readonly PasswordService _passwordService;
+    private readonly ILogger<AccountsController> _logger;
 
-    public AccountsController(PickleballContext context, PasswordService passwordService)
+    public AccountsController(
+        PickleballContext context,
+        PasswordService passwordService,
+        ILogger<AccountsController>? logger = null)
     {
         _context = context;
         _passwordService = passwordService;
+        _logger = logger ?? NullLogger<AccountsController>.Instance;
     }
 
     public async Task<IActionResult> Index()
@@ -173,6 +180,9 @@ public class AccountsController : Controller
         });
         await _context.SaveChangesAsync();
 
+        _logger.LogInformation("Admin created account AccountId={AccountId} (RoleId={RoleId}, TempPassword={TempPassword}, Actor={Actor})",
+            acc.AccountId, acc.RoleId, isGeneratedTempPassword, Function._Username);
+
         if (isGeneratedTempPassword)
         {
             TempData["AdminAccountSuccess"] =
@@ -209,6 +219,8 @@ public class AccountsController : Controller
                 }
             }
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Admin updated member tier/role for AccountId={AccountId} (RoleId={RoleId}, Tier={Tier}, Actor={Actor})",
+                acc.AccountId, acc.RoleId, acc.MemberTier, Function._Username);
             TempData["AdminAccountSuccess"] = $"Đã cập nhật hạng thẻ & phân quyền cho {acc.FullName}.";
         }
         return RedirectToAction(nameof(Index));
@@ -224,6 +236,8 @@ public class AccountsController : Controller
             acc.IsActive = !acc.IsActive;
             acc.SecurityStamp = Function.GenerateSecurityStamp();
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Admin toggled account active state: AccountId={AccountId}, IsActive={IsActive}, Actor={Actor}",
+                acc.AccountId, acc.IsActive, Function._Username);
             TempData["AdminAccountSuccess"] = $"Đã {(acc.IsActive ? "mở khóa" : "tạm khóa & thu hồi phiên đăng nhập của")} tài khoản {acc.FullName}.";
         }
         return RedirectToAction(nameof(Index));

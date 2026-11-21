@@ -4,6 +4,8 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PickleballClub.Models;
 
 namespace PickleballClub.Services;
@@ -62,6 +64,13 @@ public class OrderOperationResult
 
 public class OrderService
 {
+    private readonly ILogger<OrderService> _logger;
+
+    public OrderService(ILogger<OrderService>? logger = null)
+    {
+        _logger = logger ?? NullLogger<OrderService>.Instance;
+    }
+
     public async Task<OrderOperationResult> CreateOrderAsync(
         PickleballContext context,
         CreateShopOrderInput input)
@@ -299,6 +308,7 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
                     if (affected == 0)
                     {
                         if (tx != null) await tx.RollbackAsync();
+                        _logger.LogWarning("Order creation rejected due to insufficient stock: ProductId={ProductId}, RequestedQty={Qty}", grp.ProductId, grp.TotalQty);
                         return OrderOperationResult.Fail($"Mặt hàng '{prod.Title}' không đủ số lượng tồn kho.", 409);
                     }
 
@@ -310,6 +320,7 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
                     int available = prod.UnitInStock ?? prod.Quantity ?? 0;
                     if (available < grp.TotalQty)
                     {
+                        _logger.LogWarning("Order creation rejected due to insufficient stock: ProductId={ProductId}, Available={Available}, RequestedQty={Qty}", grp.ProductId, available, grp.TotalQty);
                         return OrderOperationResult.Fail($"Mặt hàng '{prod.Title}' chỉ còn {available} sản phẩm trong kho.", 409);
                     }
                     balanceAfter = available - grp.TotalQty;
@@ -419,9 +430,12 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
             await context.SaveChangesAsync();
             if (tx != null) await tx.CommitAsync();
 
+            _logger.LogInformation("Order {OrderCode} created (TotalVnd={TotalAmount}, Items={ItemCount}, Method={PaymentMethod}, LinkedBooking={LinkedBooking})",
+                orderCode, totalAmount, totalQty, order.PaymentMethod, linkedBooking?.BookingCode ?? "STANDALONE");
+
             return OrderOperationResult.Ok(order, linkedBooking);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
             if (tx != null) await tx.RollbackAsync();
 
@@ -430,6 +444,7 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
                 var afterConflict = await IdempotencyService.CheckAsync(context, cleanIdem, idemScope, idemActor, idemTarget, idemPayload);
                 if (afterConflict.Status == IdempotencyStatus.Conflict)
                 {
+                    _logger.LogWarning("Order idempotency conflict detected");
                     return OrderOperationResult.Fail(afterConflict.ConflictMessage!, 409, IdempotencyService.ConflictErrorCode);
                 }
                 if (afterConflict.Status == IdempotencyStatus.Replay && afterConflict.ExistingRecord?.ResultEntityId != null)
@@ -437,10 +452,14 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
                     var replayed = await context.TbOrders.AsNoTracking()
                         .FirstOrDefaultAsync(o => o.OrderId == afterConflict.ExistingRecord.ResultEntityId.Value);
                     if (replayed != null)
+                    {
+                        _logger.LogInformation("Order idempotency replay returned for {OrderCode}", replayed.Code);
                         return OrderOperationResult.Ok(replayed, replay: true);
+                    }
                 }
             }
 
+            _logger.LogWarning(ex, "Order creation aborted due to inventory/database concurrency conflict");
             return OrderOperationResult.Fail("Giao dịch tạo đơn bị xung đột dữ liệu hoặc trùng khóa. Vui lòng thử lại.", 409);
         }
     }
@@ -519,6 +538,7 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
             if (!matchesTx)
             {
                 if (tx != null) await tx.RollbackAsync();
+                _logger.LogWarning("Order {OrderCode} duplicate/conflicting payment attempt rejected", order.Code);
                 return OrderOperationResult.Fail(
                     "Khóa IdempotencyKey đã được sử dụng cho một giao dịch thu tiền khác (khác đơn hàng, số tiền hoặc phương thức).",
                     409,
@@ -526,6 +546,7 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
             }
 
             if (tx != null) await tx.CommitAsync();
+            _logger.LogInformation("Order {OrderCode} payment idempotency replay detected (TxId={TxId})", order.Code, existingTx.TransactionId);
             return OrderOperationResult.Ok(order, tx: existingTx, replay: true);
         }
 
@@ -608,6 +629,18 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+
+        if (newNetPaid < totalDue)
+        {
+            _logger.LogInformation("Order {OrderCode} partial payment recorded: Amount={Amount} VND, Paid={Paid}/{Due}, Method={Method}, TxId={TxId}",
+                order.Code, amount, newNetPaid, totalDue, cleanMethod, paymentRow.TransactionId);
+        }
+        else
+        {
+            _logger.LogInformation("Order {OrderCode} payment recorded: Amount={Amount} VND, Method={Method}, TxId={TxId}",
+                order.Code, amount, cleanMethod, paymentRow.TransactionId);
+        }
+
         return OrderOperationResult.Ok(order, tx: paymentRow);
     }
 
@@ -740,6 +773,8 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Order {OrderCode} refund processed: Amount={RefundAmount} VND, NetPaidAfter={NetPaid}, TxId={TxId}",
+            order.Code, refundAmount, newNetPaid, refundRow.TransactionId);
         return OrderOperationResult.Ok(order, tx: refundRow);
     }
 
@@ -784,6 +819,7 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
         });
 
         await context.SaveChangesAsync();
+        _logger.LogInformation("Order {OrderCode} fulfilled (delivered)", order.Code ?? order.OrderId.ToString());
         return OrderOperationResult.Ok(order);
     }
 
@@ -853,6 +889,7 @@ WHERE ProductId = {0} AND IsActive = 1 AND COALESCE(UnitInStock, Quantity, 0) >=
         if (netPaid > 0)
         {
             if (tx != null) await tx.RollbackAsync();
+            _logger.LogWarning("Order {OrderCode} cancel blocked because payment is recorded (NetPaid={NetPaid})", order.Code, netPaid);
             return OrderOperationResult.Fail("Đơn hàng đã thu tiền. Vui lòng thực hiện giao dịch Hoàn tiền (Refund) trước khi hủy và hoàn kho.", 409, "ORDER_HAS_PAYMENT");
         }
 
@@ -925,6 +962,7 @@ WHERE ProductId = {0}",
 
         await context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        _logger.LogInformation("Order {OrderCode} cancelled and restocked", order.Code);
         return OrderOperationResult.Ok(order);
     }
 

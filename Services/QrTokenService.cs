@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using QRCoder;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -17,9 +19,14 @@ public class QrTokenService
 {
     public const string DevOnlyFallbackKey = "SpikePickleballClub-DevOnly-HMAC-Key-2026-ChangeInProd-32Bytes!";
     private readonly byte[] _secretKey;
+    private readonly ILogger<QrTokenService> _logger;
 
-    public QrTokenService(IConfiguration configuration, IHostEnvironment? environment = null)
+    public QrTokenService(
+        IConfiguration configuration,
+        IHostEnvironment? environment = null,
+        ILogger<QrTokenService>? logger = null)
     {
+        _logger = logger ?? NullLogger<QrTokenService>.Instance;
         string? configuredKey = configuration["Security:QrSigningKey"];
         if (string.IsNullOrWhiteSpace(configuredKey))
         {
@@ -28,6 +35,7 @@ public class QrTokenService
 
         bool isDevOrTest = environment == null ||
                            environment.IsDevelopment() ||
+                           environment.IsEnvironment("SqlDebug") ||
                            environment.IsEnvironment("Testing");
 
         bool isPlaceholderKey = !string.IsNullOrWhiteSpace(configuredKey) &&
@@ -39,6 +47,7 @@ public class QrTokenService
         {
             if (!isDevOrTest)
             {
+                _logger.LogCritical("Missing or weak Security:QrSigningKey configuration in non-development environment");
                 throw new InvalidOperationException(
                     "CRITICAL SECURITY CONFIGURATION ERROR: 'Security:QrSigningKey' (or environment variable 'SPIKE_QR_SIGNING_KEY') " +
                     "must be configured with a non-placeholder secret of at least 32 characters in Production/Staging environments.");
@@ -79,6 +88,7 @@ public class QrTokenService
         if (string.IsNullOrWhiteSpace(token))
         {
             errorReason = "Mã QR trống.";
+            _logger.LogWarning("QR token validation failed: Reason=EmptyToken");
             return false;
         }
 
@@ -86,6 +96,7 @@ public class QrTokenService
         if (!trimmed.StartsWith("SPK1.", StringComparison.Ordinal))
         {
             errorReason = "Định dạng mã QR không phải vé điện tử hợp lệ của CLB.";
+            _logger.LogWarning("QR token validation failed: Reason=InvalidPrefix");
             return false;
         }
 
@@ -93,6 +104,7 @@ public class QrTokenService
         if (parts.Length != 3)
         {
             errorReason = "Cấu trúc chữ ký mã QR không hợp lệ.";
+            _logger.LogWarning("QR token validation failed: Reason=InvalidSegmentCount");
             return false;
         }
 
@@ -105,6 +117,7 @@ public class QrTokenService
                 Encoding.UTF8.GetBytes(expectedSig)))
         {
             errorReason = "Chữ ký bảo mật của mã QR không hợp lệ hoặc đã bị chỉnh sửa!";
+            _logger.LogWarning("QR token validation failed: Reason=SignatureMismatch");
             return false;
         }
 
@@ -115,6 +128,7 @@ public class QrTokenService
             if (fields.Length < 3)
             {
                 errorReason = "Dữ liệu vé bên trong mã QR không đầy đủ.";
+                _logger.LogWarning("QR token validation failed: Reason=IncompletePayload");
                 return false;
             }
 
@@ -123,6 +137,7 @@ public class QrTokenService
             if (!long.TryParse(fields[2], out long expUnix))
             {
                 errorReason = "Thời hạn mã QR không hợp lệ.";
+                _logger.LogWarning("QR token validation failed: Reason=InvalidExpiry, BookingCode={BookingCode}", bookingCode);
                 return false;
             }
 
@@ -130,6 +145,7 @@ public class QrTokenService
             if (nowUnix > expUnix)
             {
                 errorReason = "Mã QR này đã hết thời hạn hiệu lực.";
+                _logger.LogWarning("QR token expired for Booking={BookingCode}", bookingCode);
                 return false;
             }
 
@@ -138,6 +154,7 @@ public class QrTokenService
         catch
         {
             errorReason = "Không thể giải mã nội dung vé QR.";
+            _logger.LogWarning("QR token validation failed: Reason=PayloadDecodeError");
             return false;
         }
     }

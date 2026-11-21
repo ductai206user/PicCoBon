@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using PickleballClub.Logging;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
@@ -14,11 +17,13 @@ public class LoginController : Controller
 {
     private readonly PickleballContext _context;
     private readonly PasswordService _passwordService;
+    private readonly ILogger<LoginController> _logger;
 
-    public LoginController(PickleballContext context, PasswordService passwordService)
+    public LoginController(PickleballContext context, PasswordService passwordService, ILogger<LoginController>? logger = null)
     {
         _context = context;
         _passwordService = passwordService;
+        _logger = logger ?? NullLogger<LoginController>.Instance;
     }
 
     public IActionResult Index()
@@ -51,6 +56,7 @@ public class LoginController : Controller
 
         if (check == null)
         {
+            _logger.LogWarning("Admin login failed for Identifier={Identifier}: Reason=AccountNotFound", CorrelationContext.MaskIdentifier(inputUser));
             TempData["AuthError"] = "Tài khoản hoặc mật khẩu không chính xác!";
             return RedirectToAction("Index", "Login", new { area = "Admin" });
         }
@@ -58,12 +64,14 @@ public class LoginController : Controller
         var verify = _passwordService.VerifyPassword(check, check.Password, rawPass, out string? upgradedHash);
         if (verify == PasswordVerificationResult.Failed)
         {
+            _logger.LogWarning("Admin login failed for AccountId={AccountId}: Reason=InvalidPassword", check.AccountId);
             TempData["AuthError"] = "Tài khoản hoặc mật khẩu không chính xác!";
             return RedirectToAction("Index", "Login", new { area = "Admin" });
         }
 
         if (check.RoleId != 1 && check.RoleId != 3)
         {
+            _logger.LogWarning("Admin login denied for AccountId={AccountId}: Reason=InsufficientRole ({RoleId})", check.AccountId, check.RoleId);
             TempData["AuthError"] = "Tài khoản này không có quyền truy cập khu vực Quản trị / Điều hành!";
             return RedirectToAction("Index", "Login", new { area = "Admin" });
         }
@@ -82,6 +90,7 @@ public class LoginController : Controller
         await _context.SaveChangesAsync();
 
         await Function.SignInAccountAsync(HttpContext, check);
+        _logger.LogInformation("Admin/Staff signed in (AccountId={AccountId}, RoleId={RoleId})", check.AccountId, check.RoleId);
 
         return RedirectToAction("Index", "Home", new { area = "Admin" });
     }

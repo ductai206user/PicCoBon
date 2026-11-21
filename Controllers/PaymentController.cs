@@ -13,6 +13,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PickleballClub.Configuration;
 using PickleballClub.Models;
@@ -29,6 +31,7 @@ public sealed class PaymentController : Controller
     private readonly QrTokenService _qrTokenService;
     private readonly IAntiforgery _antiforgery;
     private readonly IDataProtector _guestRecoveryProtector;
+    private readonly ILogger<PaymentController> _logger;
 
     public PaymentController(
         PickleballContext context,
@@ -36,7 +39,8 @@ public sealed class PaymentController : Controller
         IOptionsMonitor<PayPalOptions> payPalOptions,
         QrTokenService qrTokenService,
         IAntiforgery antiforgery,
-        IDataProtectionProvider dataProtectionProvider)
+        IDataProtectionProvider dataProtectionProvider,
+        ILogger<PaymentController>? logger = null)
     {
         _context = context;
         _payPalPaymentService = payPalPaymentService;
@@ -44,6 +48,7 @@ public sealed class PaymentController : Controller
         _qrTokenService = qrTokenService;
         _antiforgery = antiforgery;
         _guestRecoveryProtector = GuestRecoveryCookieHelper.CreateProtector(dataProtectionProvider);
+        _logger = logger ?? NullLogger<PaymentController>.Instance;
     }
 
     private string? ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString();
@@ -59,6 +64,10 @@ public sealed class PaymentController : Controller
         _antiforgery.GetAndStoreTokens(HttpContext);
 
         bool validState = _payPalPaymentService.TryUnprotectState(state, out var payload) && payload != null;
+        if (!validState && !string.IsNullOrWhiteSpace(state))
+        {
+            _logger.LogWarning("PayPal return rejected: invalid or expired state signature");
+        }
         ViewData["Title"] = "Xác nhận thanh toán PayPal Sandbox — Spike OS";
         ViewBag.StateToken = state ?? string.Empty;
         ViewBag.PayPalOrderId = token ?? string.Empty;
@@ -79,6 +88,10 @@ public sealed class PaymentController : Controller
         _antiforgery.GetAndStoreTokens(HttpContext);
 
         bool validState = _payPalPaymentService.TryUnprotectState(state, out var payload) && payload != null;
+        if (!validState && !string.IsNullOrWhiteSpace(state))
+        {
+            _logger.LogWarning("PayPal cancel return rejected: invalid or expired state signature");
+        }
         ViewData["Title"] = "Đã hủy thanh toán PayPal Sandbox — Spike OS";
         ViewBag.StateToken = state ?? string.Empty;
         ViewBag.PayPalOrderId = token ?? string.Empty;
@@ -143,6 +156,12 @@ public sealed class PaymentController : Controller
             GuestRecoveryTokens = guestTokens,
             IpAddress = ClientIp
         }, cancellationToken);
+
+        if (result.Success && !string.IsNullOrWhiteSpace(result.ApproveUrl))
+        {
+            _logger.LogInformation("PayPal approval redirect initiated for {TargetType}:{TargetCode} (Attempt={AttemptCode}, OrderId={PayPalOrderId})",
+                result.TargetType, result.TargetCode, result.AttemptCode, result.PayPalOrderId);
+        }
 
         return MapPayPalResultToActionResult(result, guestAccessToken, guestTokens);
     }
