@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spike OS — 6-Pose Mascot Animation Preview</title>
+  <link rel="icon" type="image/png" href="/assets/spike-favicon.png" />
+  <link rel="stylesheet" href="/css/core/tokens.css" />
+  <link rel="stylesheet" href="/css/core/reset.css" />
+  <link rel="stylesheet" href="/css/components/primitives.css" />
+  <link rel="stylesheet" href="/css/components/mascot-assistant.css" />
+  <style>
+    body {
+      background: var(--surface-secondary, #F6F8F6);
+      color: var(--text-primary, #17251D);
+      font-family: var(--font-sans, 'Inter', sans-serif);
+      min-height: 100vh;
+      margin: 0;
+      padding: 28px 16px 96px;
+    }
+    .mp-shell {
+      max-width: 1040px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .mp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--surface, #FFFFFF);
+      border: 1px solid var(--border-default, #DFE8E1);
+      border-radius: 14px;
+      padding: 16px 22px;
+      box-shadow: var(--shadow-xs);
+    }
+    .mp-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      margin: 0 0 2px;
+    }
+    .mp-sub {
+      font-size: 0.84rem;
+      color: var(--text-secondary, #4A5950);
+      margin: 0;
+    }
+    .mp-grid {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .mp-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+    .mp-card {
+      background: var(--surface, #FFFFFF);
+      border: 1px solid var(--border-default, #DFE8E1);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: var(--shadow-xs);
+    }
+    .mp-stage-box {
+      position: relative;
+      height: 300px;
+      border-radius: 12px;
+      border: 1px dashed var(--brand-primary-border, #B7E4C7);
+      background-color: #EAF7EE;
+      background-image:
+        linear-gradient(45deg, rgba(46, 139, 87, 0.06) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(46, 139, 87, 0.06) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(46, 139, 87, 0.06) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(46, 139, 87, 0.06) 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .mp-stage-mascot {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      cursor: pointer;
+    }
+    .mp-status-bar {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--surface-secondary, #F6F8F6);
+      border: 1px solid var(--border-default, #DFE8E1);
+      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .mp-status-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .mp-controls-group {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .mp-group-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-secondary, #4A5950);
+      margin-bottom: 6px;
+      display: block;
+    }
+    .mp-btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .mp-pose-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 520px) {
+      .mp-pose-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .mp-pose-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 8px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border-default, #DFE8E1);
+      background: var(--surface, #FFFFFF);
+      cursor: pointer;
+      transition: all 140ms ease;
+    }
+    .mp-pose-card:hover {
+      border-color: var(--brand-primary, #2E8B57);
+      background: var(--surface-subtle, #FAFBF9);
+      transform: translateY(-1px);
+    }
+    .mp-pose-card.is-active {
+      border-color: var(--brand-primary, #2E8B57);
+      background: var(--brand-primary-tint, #EAF7EE);
+      box-shadow: 0 0 0 2px rgba(46, 139, 87, 0.16);
+    }
+    .mp-pose-card img {
+      width: 68px;
+      height: 68px;
+      object-fit: contain;
+    }
+    .mp-pose-name {
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--text-primary, #17251D);
+    }
+  </style>
+</head>
+<body>
+  <div class="mp-shell">
+    <header class="mp-header">
+      <div>
+        <h1 class="mp-title">Spike OS — 6-Pose Mascot Animation Preview</h1>
+        <p class="mp-sub">Dual-Layer PNG Crossfade (220ms) · Normalized Transparent Canvas · No Rigging</p>
+      </div>
+      <div class="mp-btn-row">
+        <a href="/" class="btn btn-sm btn-secondary">← Về Trang chủ Spike OS</a>
+      </div>
+    </header>
+
+    <div class="mp-grid">
+      <!-- Left: Live Stage -->
+      <section class="mp-card">
+        <div class="mp-stage-box" id="previewStageBox">
+          <div id="previewMascotStage" class="mp-stage-mascot" title="Hover hoặc Click để thử phản ứng"></div>
+        </div>
+        <div class="mp-status-bar">
+          <div class="mp-status-row">
+            <span>Pose hiện tại:</span>
+            <strong id="statusPoseLabel">01 · Idle (Đứng nghỉ)</strong>
+          </div>
+          <div class="mp-status-row">
+            <span>Tệp PNG:</span>
+            <code id="statusPoseSrc" style="font-size:0.75rem;">/assets/assistant/01_idle.png</code>
+          </div>
+          <div class="mp-status-row">
+            <span>Chế độ:</span>
+            <strong id="statusModeLabel">Idle Loop (Tự nhiên)</strong>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Interactive Controls & 6-Pose Gallery -->
+      <section class="mp-card mp-controls-group">
+        <div>
+          <span class="mp-group-label">Chuỗi chuyển động 6 dáng (Six-Pose Sequence &amp; Step Controls)</span>
+          <div class="mp-btn-row">
+            <button type="button" class="btn btn-sm btn-secondary" id="btnPrevPose">← Pose trước</button>
+            <button type="button" class="btn btn-sm btn-primary" id="btnToggleSequence">▶ Chạy chuỗi 6 dáng</button>
+            <button type="button" class="btn btn-sm btn-secondary" id="btnNextPose">Pose tiếp →</button>
+            <button type="button" class="btn btn-sm btn-ghost" id="btnStopMascot">⏹ Dừng (Stop)</button>
+          </div>
+        </div>
+
+        <div>
+          <span class="mp-group-label">Tốc độ chuyển động &amp; Hiệu ứng nổi (Speed &amp; Idle Float)</span>
+          <div class="mp-btn-row">
+            <button type="button" class="btn btn-xs btn-secondary js-speed-btn" data-speed="0.6">0.6x Chậm</button>
+            <button type="button" class="btn btn-xs btn-primary js-speed-btn" data-speed="1">1.0x Chuẩn</button>
+            <button type="button" class="btn btn-xs btn-secondary js-speed-btn" data-speed="1.5">1.5x Nhanh</button>
+            <button type="button" class="btn btn-xs btn-secondary js-speed-btn" data-speed="2">2.0x</button>
+            <button type="button" class="btn btn-xs btn-secondary" id="btnToggleIdleFloat" aria-pressed="true">Idle Float: BẬT</button>
+          </div>
+        </div>
+
+        <div>
+          <span class="mp-group-label">Chọn trực tiếp từng dáng (6 Existing PNG Poses)</span>
+          <div class="mp-pose-grid" id="poseGalleryGrid">
+            <button type="button" class="mp-pose-card is-active" data-pose-btn="idle">
+              <img src="/assets/assistant/01_idle.png" alt="01 Idle" />
+              <span class="mp-pose-name">01 · Idle</span>
+            </button>
+            <button type="button" class="mp-pose-card" data-pose-btn="wave">
+              <img src="/assets/assistant/02_wave.png" alt="02 Wave" />
+              <span class="mp-pose-name">02 · Wave</span>
+            </button>
+            <button type="button" class="mp-pose-card" data-pose-btn="thinking">
+              <img src="/assets/assistant/03_thinking.png" alt="03 Thinking" />
+              <span class="mp-pose-name">03 · Thinking</span>
+            </button>
+            <button type="button" class="mp-pose-card" data-pose-btn="chat">
+              <img src="/assets/assistant/04_chat.png" alt="04 Chat" />
+              <span class="mp-pose-name">04 · Chat</span>
+            </button>
+            <button type="button" class="mp-pose-card" data-pose-btn="idea">
+              <img src="/assets/assistant/05_idea.png" alt="05 Idea" />
+              <span class="mp-pose-name">05 · Idea</span>
+            </button>
+            <button type="button" class="mp-pose-card" data-pose-btn="happy">
+              <img src="/assets/assistant/06_jump.png" alt="06 Happy / Jump" />
+              <span class="mp-pose-name">06 · Happy</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Also render the bottom-right floating mascot as on public pages -->
+  <button type="button"
+          id="spikeFloatingMascot"
+          class="spk-mascot-widget"
+          aria-label="Trợ lý linh vật Spike OS"
+          title="Spike Mascot"></button>
+
+  <script src="/js/mascot-assistant.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const stageEl = document.getElementById('previewMascotStage');
+      const statusPoseLabel = document.getElementById('statusPoseLabel');
+      const statusPoseSrc = document.getElementById('statusPoseSrc');
+      const statusModeLabel = document.getElementById('statusModeLabel');
+      const btnToggleSeq = document.getElementById('btnToggleSequence');
+      const btnToggleIdle = document.getElementById('btnToggleIdleFloat');
+      let idleFloatOn = true;
+
+      const previewMascot = new window.SpikeMascotController(stageEl, {
+        autoIdleVariation: true,
+        sequenceHoldMs: 1250,
+        idleFloatEnabled: true,
+        onPoseChange(pose, ctrl) {
+          statusPoseLabel.textContent = pose.label;
+          statusPoseSrc.textContent = pose.src;
+          document.querySelectorAll('[data-pose-btn]').forEach(btn => {
+            btn.classList.toggle('is-active', btn.getAttribute('data-pose-btn') === pose.key);
+          });
+          if (window.mascot && window.mascot !== ctrl) {
+            window.mascot.play(pose.key);
+          }
+        }
+      });
+
+      window.previewMascot = previewMascot;
+
+      document.querySelectorAll('[data-pose-btn]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-pose-btn');
+          previewMascot.play(key);
+          btnToggleSeq.textContent = '▶ Chạy chuỗi 6 dáng';
+          statusModeLabel.textContent = 'Chế độ chọn tay (' + key + ')';
+        });
+      });
+
+      document.getElementById('btnPrevPose').addEventListener('click', () => {
+        previewMascot.prevPose();
+      });
+
+      document.getElementById('btnNextPose').addEventListener('click', () => {
+        previewMascot.nextPose();
+      });
+
+      btnToggleSeq.addEventListener('click', () => {
+        if (previewMascot.isSequencePlaying) {
+          previewMascot.play('idle');
+          btnToggleSeq.textContent = '▶ Chạy chuỗi 6 dáng';
+          statusModeLabel.textContent = 'Idle Loop (Tự nhiên)';
+        } else {
+          previewMascot.startSequence(1250);
+          btnToggleSeq.textContent = '⏸ Tạm dừng chuỗi';
+          statusModeLabel.textContent = 'Đang lặp chuỗi 6 dáng (1.25s/pose)';
+        }
+      });
+
+      document.getElementById('btnStopMascot').addEventListener('click', () => {
+        previewMascot.stop();
+        btnToggleSeq.textContent = '▶ Chạy chuỗi 6 dáng';
+        statusModeLabel.textContent = 'Đã dừng (Stopped)';
+      });
+
+      document.querySelectorAll('.js-speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const spd = parseFloat(btn.getAttribute('data-speed') || '1');
+          previewMascot.setSpeed(spd);
+          if (window.mascot) window.mascot.setSpeed(spd);
+          document.querySelectorAll('.js-speed-btn').forEach(b => {
+            b.classList.toggle('btn-primary', b === btn);
+            b.classList.toggle('btn-secondary', b !== btn);
+          });
+        });
+      });
+
+      btnToggleIdle.addEventListener('click', () => {
+        idleFloatOn = !idleFloatOn;
+        previewMascot.setIdleMotion(idleFloatOn);
+        if (window.mascot) window.mascot.setIdleMotion(idleFloatOn);
+        btnToggleIdle.setAttribute('aria-pressed', idleFloatOn ? 'true' : 'false');
+        btnToggleIdle.textContent = 'Idle Float: ' + (idleFloatOn ? 'BẬT' : 'TẮT');
+      });
+    });
+  </script>
+</body>
+</html>

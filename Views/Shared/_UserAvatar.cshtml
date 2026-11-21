@@ -1,0 +1,22 @@
+@using PickleballClub.Utilities
+@{
+    string avatarUrl = Function.GetSafeAvatarUrl(ViewData["AvatarUrlOverride"] as string ?? Function._Avatar);
+    string fullName = (ViewData["AvatarNameOverride"] as string) ?? Function._FullName;
+    string initials = Function.GetAvatarInitials(fullName, Function._Username);
+    string sizeClass = ViewData["AvatarSizeClass"] as string ?? "spk-user-avatar--nav";
+    bool hasAvatar = !string.IsNullOrEmpty(avatarUrl);
+}
+<span class="spk-user-avatar @sizeClass @(hasAvatar ? "has-image" : "")"
+      data-user-avatar="true"
+      data-avatar-initials="@initials">
+    <img src="@(hasAvatar ? avatarUrl : null)"
+         alt="@(string.IsNullOrWhiteSpace(fullName) ? "Ảnh đại diện" : fullName)"
+         class="spk-user-avatar-img"
+         data-user-avatar-img="true"
+         hidden="@(!hasAvatar)"
+         onerror="if(window.SpikeAvatarSync){window.SpikeAvatarSync.handleImageError(this);}" />
+    <span class="spk-user-avatar-initials"
+          data-user-avatar-initials="true"
+          hidden="@hasAvatar"
+          aria-hidden="true">@initials</span>
+</span>

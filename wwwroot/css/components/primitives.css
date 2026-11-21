@@ -1008,3 +1008,37 @@ html[data-theme="dark"] .sn-table tbody tr:hover td {
 .sh-card-header-pending .card-header-title {
   color: var(--status-warning-text);
 }
+
+/* Global Developer Attribution & Copyright Credits */
+.footer-credits {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-family: var(--font-sans);
+  font-size: inherit;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.footer-credits-sep {
+  color: var(--border-strong);
+  user-select: none;
+}
+
+.footer-credits-dev {
+  font-weight: 600;
+  color: var(--brand-primary-ink);
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 560px) {
+  .footer-credits {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .footer-credits-sep {
+    display: none;
+  }
+}

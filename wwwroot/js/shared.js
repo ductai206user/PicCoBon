@@ -678,6 +678,9 @@ async function syncDatabaseFromServer(force = false) {
     IS_STAFF_OR_ADMIN = Boolean(data.isStaffOrAdmin);
     if (data.currentUser) {
       SERVER_USER = data.currentUser;
+      if (window.SpikeAvatarSync) {
+        window.SpikeAvatarSync.setGlobalAvatar(data.currentUser.avatar, data.currentUser.name);
+      }
     } else if (window.SERVER_AUTH_USER && window.SERVER_AUTH_USER.id) {
       SERVER_USER = window.SERVER_AUTH_USER;
     } else {
@@ -2196,5 +2199,118 @@ window.SpikePayPal = (() => {
     formatUsd,
     formatExchangeNote,
     createAndRedirect
+  };
+})();
+
+// ================================================================
+// GLOBAL USER AVATAR SYNCHRONIZATION (Single Source of Truth)
+// ================================================================
+window.SpikeAvatarSync = (function () {
+  function getSafeUrl(url) {
+    if (typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (!trimmed || trimmed.length > 500 || /[\r\n\0]/.test(trimmed)) return '';
+    if (trimmed.startsWith('/')) {
+      return (trimmed.startsWith('//') || trimmed.startsWith('/\\') || trimmed.includes('..')) ? '' : trimmed;
+    }
+    try {
+      const parsed = new URL(trimmed);
+      return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? trimmed : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function getInitials(name) {
+    const clean = typeof name === 'string' ? name.trim() : '';
+    return clean ? clean.charAt(0).toUpperCase() : 'U';
+  }
+
+  function applyToElement(container, avatarUrl, fullName) {
+    if (!container) return;
+    const safeUrl = getSafeUrl(avatarUrl);
+    const initials = getInitials(fullName || container.dataset.avatarInitials || 'U');
+    container.dataset.avatarInitials = initials;
+
+    const img = container.querySelector('[data-user-avatar-img="true"]');
+    const badge = container.querySelector('[data-user-avatar-initials="true"]');
+    if (badge) badge.textContent = initials;
+
+    if (safeUrl && img) {
+      if (img.getAttribute('src') !== safeUrl) {
+        img.src = safeUrl;
+      }
+      img.hidden = false;
+      if (badge) badge.hidden = true;
+      container.classList.add('has-image');
+    } else {
+      if (img) {
+        img.removeAttribute('src');
+        img.hidden = true;
+      }
+      if (badge) badge.hidden = false;
+      container.classList.remove('has-image');
+    }
+  }
+
+  function setGlobalAvatar(avatarUrl, fullName) {
+    const safeUrl = getSafeUrl(avatarUrl);
+    const trimmedName = typeof fullName === 'string' ? fullName.trim() : '';
+
+    if (window.SERVER_AUTH_USER) {
+      window.SERVER_AUTH_USER.avatar = safeUrl;
+      if (trimmedName) window.SERVER_AUTH_USER.name = trimmedName;
+    }
+    if (typeof SERVER_USER === 'object' && SERVER_USER !== null) {
+      SERVER_USER.avatar = safeUrl;
+      if (trimmedName) SERVER_USER.name = trimmedName;
+    }
+
+    document.querySelectorAll('[data-user-avatar="true"]').forEach(el => {
+      applyToElement(el, safeUrl, trimmedName);
+    });
+
+    if (trimmedName) {
+      document.querySelectorAll('[data-global-user-name="true"]').forEach(el => {
+        el.textContent = trimmedName;
+      });
+    }
+  }
+
+  function handleImageError(img) {
+    if (!img) return;
+    img.hidden = true;
+    img.removeAttribute('src');
+    const container = img.closest('[data-user-avatar="true"]');
+    if (container) {
+      container.classList.remove('has-image');
+      const badge = container.querySelector('[data-user-avatar-initials="true"]');
+      if (badge) badge.hidden = false;
+      return;
+    }
+    if (img.id === 'liveAvatarPreview') {
+      const fb = document.getElementById('liveAvatarFallback');
+      if (fb) fb.hidden = false;
+    } else if (img.id === 'inlineAvatarPreview') {
+      const fb = document.getElementById('inlineAvatarFallback');
+      if (fb) fb.hidden = false;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('img[data-user-avatar-img="true"], #liveAvatarPreview, #inlineAvatarPreview').forEach(img => {
+      const src = img.getAttribute('src');
+      if (src && img.complete && img.naturalWidth === 0) {
+        handleImageError(img);
+      }
+    });
+  });
+
+  return {
+    getSafeUrl,
+    getInitials,
+    applyToElement,
+    setGlobalAvatar,
+    handleImageError
   };
 })();

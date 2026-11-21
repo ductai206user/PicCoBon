@@ -405,7 +405,7 @@ public class ApiDbController : ControllerBase
                     mustChangePassword = acc.MustChangePassword,
                     role = acc.RoleId == 1 ? "admin" : acc.RoleId == 3 ? "staff" : "user",
                     roleLabel = acc.RoleId == 1 ? "Ban Quản Trị CLB" : acc.RoleId == 3 ? "Nhân viên Vận hành" : "Hội viên CLB",
-                    avatar = acc.Avatar ?? string.Empty
+                    avatar = Function.GetSafeAvatarUrl(acc.Avatar)
                 };
             }
         }
@@ -1802,7 +1802,7 @@ public class ApiDbController : ControllerBase
                 skillLevel = account.SkillLevel ?? string.Empty,
                 role = isAdmin ? "admin" : account.RoleId == 3 ? "staff" : "user",
                 roleLabel = isAdmin ? "Ban Quản Trị CLB" : account.RoleId == 3 ? "Nhân viên CLB" : "Hội viên CLB",
-                avatar = account.Avatar ?? string.Empty
+                avatar = Function.GetSafeAvatarUrl(account.Avatar)
             }
         });
     }

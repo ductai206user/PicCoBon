@@ -235,6 +235,7 @@ html[data-theme="dark"] .sh-brand-img-wide {
   width: 32px;
   height: 32px;
   border-radius: 8px;
+  overflow: hidden;
   background-color: var(--brand-primary-tint);
   color: var(--brand-deep);
   display: inline-flex;

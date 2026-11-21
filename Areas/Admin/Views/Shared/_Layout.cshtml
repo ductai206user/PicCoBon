@@ -28,6 +28,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Phùng Đức Tài">
     <meta name="csrf-token" content="@csrfTokens.RequestToken">
     <title>@pageTitle — Spike OS Workspace</title>
     <link rel="icon" type="image/png" href="/assets/spike-favicon.png">
@@ -181,10 +182,10 @@
                 <div class="sh-nav-user">
                     <a href="/Account/Profile" class="sh-nav-user-info" title="Hồ sơ cá nhân">
                         <div class="sh-nav-user-avatar">
-                            <iconify-icon icon="lucide:shield-check" width="15"></iconify-icon>
+                            @await Html.PartialAsync("~/Views/Shared/_UserAvatar.cshtml", new ViewDataDictionary(ViewData) { ["AvatarSizeClass"] = "spk-user-avatar--admin-sidebar" })
                         </div>
                         <div class="sh-nav-user-text">
-                            <span class="sh-nav-user-name">@(string.IsNullOrEmpty(Function._FullName) ? "Điều hành CLB" : Function._FullName)</span>
+                            <span class="sh-nav-user-name" data-global-user-name="true">@(string.IsNullOrEmpty(Function._FullName) ? "Điều hành CLB" : Function._FullName)</span>
                             <span class="sh-nav-user-role">@(isAdminOnly ? "Administrator" : "Staff Operator")</span>
                         </div>
                     </a>
@@ -239,9 +240,9 @@
                         <span>Soát vé QR</span>
                     </a>
                     <div class="sh-topbar-user-pill">
-                        <a href="/Account/Profile" style="display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;" title="Hồ sơ cá nhân">
-                            <iconify-icon icon="lucide:user-check" width="14" style="color:var(--brand-primary);"></iconify-icon>
-                            <span class="sh-topbar-user-name">@(string.IsNullOrEmpty(Function._FullName) ? "Ban Quản Trị" : Function._FullName)</span>
+                        <a href="/Account/Profile" style="display:inline-flex;align-items:center;gap:7px;color:inherit;text-decoration:none;" title="Hồ sơ cá nhân">
+                            @await Html.PartialAsync("~/Views/Shared/_UserAvatar.cshtml", new ViewDataDictionary(ViewData) { ["AvatarSizeClass"] = "spk-user-avatar--nav" })
+                            <span class="sh-topbar-user-name" data-global-user-name="true">@(string.IsNullOrEmpty(Function._FullName) ? "Ban Quản Trị" : Function._FullName)</span>
                         </a>
                         <a href="/Admin/Home/Logout" class="btn btn-xs btn-ghost" style="color:var(--status-danger-text);">Thoát</a>
                     </div>
@@ -254,8 +255,8 @@
 
             <footer class="sh-admin-footer">
                 <div class="sh-admin-footer-inner">
-                    <span>© 2026 Spike Pickleball Club — Hệ thống Quản trị &amp; Điều phối</span>
-                    <span>Sổ cái thời gian thực &amp; Kiểm soát phân quyền RBAC</span>
+                    @await Html.PartialAsync("~/Views/Shared/_FooterCredits.cshtml")
+                    <span>Spike Pickleball Club — Hệ thống Quản trị &amp; Điều phối · RBAC</span>
                 </div>
             </footer>
         </div>

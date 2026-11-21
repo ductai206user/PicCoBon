@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -13,6 +16,8 @@ using PickleballClub.Logging;
 using PickleballClub.Models;
 using PickleballClub.Services;
 using PickleballClub.Utilities;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 
 namespace PickleballClub.Controllers;
 
@@ -23,10 +28,26 @@ public class AccountController : Controller
         "Nam", "Nữ", "Khác", ""
     };
 
+    private static readonly HashSet<string> AllowedAvatarExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp"
+    };
+
+    private static readonly HashSet<string> AllowedAvatarContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg", "image/pjpeg", "image/png", "image/webp"
+    };
+
+    private const long MaxAvatarUploadBytes = 2 * 1024 * 1024;
+    private const int AvatarOutputSizePx = 360;
+    private const int MaxAvatarSourceDimension = 6000;
+    private const string AvatarUploadRelativeDir = "uploads/avatars";
+
     private readonly PickleballContext _context;
     private readonly PasswordService _passwordService;
     private readonly PricingService _pricingService;
     private readonly ClubSettingsService _settingsService;
+    private readonly IWebHostEnvironment? _environment;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
@@ -34,12 +55,14 @@ public class AccountController : Controller
         PasswordService passwordService,
         PricingService pricingService,
         ClubSettingsService settingsService,
+        IWebHostEnvironment? environment = null,
         ILogger<AccountController>? logger = null)
     {
         _context = context;
         _passwordService = passwordService;
         _pricingService = pricingService;
         _settingsService = settingsService;
+        _environment = environment;
         _logger = logger ?? NullLogger<AccountController>.Instance;
     }
 
@@ -278,9 +301,20 @@ public class AccountController : Controller
         return View(account);
     }
 
+    private IActionResult ProfileValidationError(string errorMessage, bool isAjax)
+    {
+        if (isAjax)
+        {
+            return BadRequest(new { ok = false, error = errorMessage });
+        }
+        TempData["ProfileError"] = errorMessage;
+        return RedirectToAction("Profile");
+    }
+
     [Authorize]
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequestFormLimits(MultipartBodyLengthLimit = 5 * 1024 * 1024)]
     public async Task<IActionResult> UpdateProfile(
         string fullName,
         string phone,
@@ -290,34 +324,35 @@ public class AccountController : Controller
         string? emergencyContact,
         string? address,
         string? avatar,
+        IFormFile? avatarFile,
         string? skillLevel,
         string? dominantHand,
         string? paddleBrand,
         string? playStyle,
         string? bio)
     {
+        bool isAjax = string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+
         if (!Function.IsLogin())
         {
-            return RedirectToAction("Login", "Account");
+            return isAjax ? Unauthorized(new { ok = false, error = "Phiên đăng nhập đã hết hạn." }) : RedirectToAction("Login", "Account");
         }
 
         int currentAccountId = Function._AccountId;
         var account = await _context.TbAccounts.FindAsync(currentAccountId);
         if (account == null || !account.IsActive)
         {
-            return RedirectToAction("Login", "Account");
+            return isAjax ? Unauthorized(new { ok = false, error = "Tài khoản không hợp lệ." }) : RedirectToAction("Login", "Account");
         }
 
         if (string.IsNullOrWhiteSpace(fullName) || fullName.Trim().Length < 2 || fullName.Trim().Length > 100)
         {
-            TempData["ProfileError"] = "Họ và tên phải từ 2 đến 100 ký tự!";
-            return RedirectToAction("Profile");
+            return ProfileValidationError("Họ và tên phải từ 2 đến 100 ký tự!", isAjax);
         }
 
         if (!BookingService.IsValidPhone(phone))
         {
-            TempData["ProfileError"] = "Số điện thoại không hợp lệ (10 chữ số, bắt đầu bằng 0 hoặc +84)!";
-            return RedirectToAction("Profile");
+            return ProfileValidationError("Số điện thoại không hợp lệ (10 chữ số, bắt đầu bằng 0 hoặc +84)!", isAjax);
         }
 
         string normalizedPhone = BookingService.NormalizePhone(phone);
@@ -326,8 +361,7 @@ public class AccountController : Controller
 
         if (phoneExists)
         {
-            TempData["ProfileError"] = "Số điện thoại này đã được liên kết với một tài khoản khác!";
-            return RedirectToAction("Profile");
+            return ProfileValidationError("Số điện thoại này đã được liên kết với một tài khoản khác!", isAjax);
         }
 
         string? normalizedEmail = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
@@ -335,16 +369,14 @@ public class AccountController : Controller
         {
             if (!normalizedEmail.Contains('@') || normalizedEmail.Length > 150)
             {
-                TempData["ProfileError"] = "Địa chỉ Email không hợp lệ!";
-                return RedirectToAction("Profile");
+                return ProfileValidationError("Địa chỉ Email không hợp lệ!", isAjax);
             }
 
             bool emailExists = await _context.TbAccounts.AnyAsync(a =>
                 a.AccountId != account.AccountId && a.Email == normalizedEmail);
             if (emailExists)
             {
-                TempData["ProfileError"] = "Địa chỉ Email này đã được sử dụng bởi tài khoản khác!";
-                return RedirectToAction("Profile");
+                return ProfileValidationError("Địa chỉ Email này đã được sử dụng bởi tài khoản khác!", isAjax);
             }
         }
 
@@ -353,8 +385,7 @@ public class AccountController : Controller
             var today = DateOnly.FromDateTime(BookingService.GetVietnamNow());
             if (parsedDob >= today || parsedDob.Year < 1920)
             {
-                TempData["ProfileError"] = "Ngày sinh không hợp lệ!";
-                return RedirectToAction("Profile");
+                return ProfileValidationError("Ngày sinh không hợp lệ!", isAjax);
             }
             account.BirthDate = parsedDob.ToString("yyyy-MM-dd");
         }
@@ -377,22 +408,185 @@ public class AccountController : Controller
         account.PlayStyle = string.IsNullOrWhiteSpace(playStyle) ? null : playStyle.Trim()[..Math.Min(playStyle.Trim().Length, 150)];
         account.Bio = string.IsNullOrWhiteSpace(bio) ? null : bio.Trim()[..Math.Min(bio.Trim().Length, 500)];
 
-        if (!string.IsNullOrWhiteSpace(avatar))
+        string? previousUploadedAvatar = null;
+        if (avatarFile != null && avatarFile.Length > 0)
+        {
+            var (ok, savedRelativeUrl, uploadError) = await SaveUploadedAvatarAsync(account.AccountId, avatarFile);
+            if (!ok || string.IsNullOrEmpty(savedRelativeUrl))
+            {
+                return ProfileValidationError(uploadError ?? "Không thể xử lý ảnh đại diện tải lên.", isAjax);
+            }
+
+            if (!string.IsNullOrWhiteSpace(account.Avatar) &&
+                account.Avatar.StartsWith($"/{AvatarUploadRelativeDir}/", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(account.Avatar, savedRelativeUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                previousUploadedAvatar = account.Avatar;
+            }
+
+            account.Avatar = savedRelativeUrl;
+        }
+        else if (!string.IsNullOrWhiteSpace(avatar))
         {
             string trimmedAvatar = avatar.Trim();
-            if (trimmedAvatar.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                trimmedAvatar.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
-                trimmedAvatar.StartsWith("/", StringComparison.OrdinalIgnoreCase))
+            if (trimmedAvatar.Length > 500)
             {
-                account.Avatar = trimmedAvatar[..Math.Min(trimmedAvatar.Length, 500)];
+                return ProfileValidationError("Đường dẫn ảnh đại diện quá dài (tối đa 500 ký tự).", isAjax);
             }
+
+            string safeAvatar = Function.GetSafeAvatarUrl(trimmedAvatar);
+            if (string.IsNullOrEmpty(safeAvatar))
+            {
+                return ProfileValidationError("Ảnh đại diện được chọn không hợp lệ.", isAjax);
+            }
+
+            if (!string.IsNullOrWhiteSpace(account.Avatar) &&
+                account.Avatar.StartsWith($"/{AvatarUploadRelativeDir}/", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(account.Avatar, safeAvatar, StringComparison.OrdinalIgnoreCase))
+            {
+                previousUploadedAvatar = account.Avatar;
+            }
+
+            account.Avatar = safeAvatar;
         }
 
         await _context.SaveChangesAsync();
-        await Function.SignInAccountAsync(HttpContext, account);
+        if (!string.IsNullOrEmpty(previousUploadedAvatar))
+        {
+            TryDeletePreviousUploadedAvatar(account.AccountId, previousUploadedAvatar);
+        }
 
-        TempData["ProfileSuccess"] = "Đã cập nhật Hồ sơ Hội viên & Vận động viên thành công!";
+        await Function.SignInAccountAsync(HttpContext, account);
+        _logger.LogInformation("Profile updated for AccountId={AccountId}, HasUploadedAvatar={HasUpload}",
+            account.AccountId, avatarFile != null && avatarFile.Length > 0);
+
+        const string successMessage = "Đã cập nhật Hồ sơ Hội viên & Vận động viên thành công!";
+        if (isAjax)
+        {
+            var antiforgery = HttpContext.RequestServices.GetService(typeof(Microsoft.AspNetCore.Antiforgery.IAntiforgery)) as Microsoft.AspNetCore.Antiforgery.IAntiforgery;
+            string? nextCsrf = antiforgery?.GetAndStoreTokens(HttpContext).RequestToken;
+            return Ok(new
+            {
+                ok = true,
+                message = successMessage,
+                avatar = Function.GetSafeAvatarUrl(account.Avatar),
+                fullName = account.FullName,
+                initials = Function.GetAvatarInitials(account.FullName, account.Username),
+                csrfToken = nextCsrf
+            });
+        }
+
+        TempData["ProfileSuccess"] = successMessage;
         return RedirectToAction("Profile");
+    }
+
+    private async Task<(bool Ok, string? RelativeUrl, string? ErrorMessage)> SaveUploadedAvatarAsync(int accountId, IFormFile file)
+    {
+        if (file.Length <= 0)
+        {
+            return (false, null, "Tệp ảnh đại diện rỗng.");
+        }
+
+        if (file.Length > MaxAvatarUploadBytes)
+        {
+            return (false, null, "Ảnh đại diện vượt quá dung lượng tối đa 2 MB.");
+        }
+
+        string ext = Path.GetExtension(file.FileName ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(ext) || !AllowedAvatarExtensions.Contains(ext))
+        {
+            return (false, null, "Định dạng ảnh không được hỗ trợ. Vui lòng chọn tệp JPG, JPEG, PNG hoặc WEBP.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(file.ContentType) && !AllowedAvatarContentTypes.Contains(file.ContentType))
+        {
+            return (false, null, "Loại tệp MIME ảnh không hợp lệ (chỉ chấp nhận JPG, PNG, WEBP).");
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var info = await Image.IdentifyAsync(stream);
+            if (info == null || info.Width < 16 || info.Height < 16 ||
+                info.Width > MaxAvatarSourceDimension || info.Height > MaxAvatarSourceDimension)
+            {
+                return (false, null, "Kích thước ảnh không hợp lệ hoặc vượt quá 6000x6000 px.");
+            }
+
+            stream.Position = 0;
+            using var image = await Image.LoadAsync(stream);
+            image.Mutate(ctx => ctx
+                .AutoOrient()
+                .Resize(new ResizeOptions
+                {
+                    Size = new Size(AvatarOutputSizePx, AvatarOutputSizePx),
+                    Mode = ResizeMode.Crop,
+                    Position = AnchorPositionMode.Center
+                }));
+
+            // Strip EXIF/metadata privacy fields before saving sanitized WebP asset
+            image.Metadata.ExifProfile = null;
+            image.Metadata.XmpProfile = null;
+
+            string uploadDir = GetAvatarUploadDirectory();
+            Directory.CreateDirectory(uploadDir);
+
+            string token = Guid.NewGuid().ToString("N")[..10];
+            string safeFileName = $"spk-avatar-{accountId}-{token}.webp";
+            string physicalPath = Path.Combine(uploadDir, safeFileName);
+            await image.SaveAsWebpAsync(physicalPath);
+
+            return (true, $"/{AvatarUploadRelativeDir}/{safeFileName}", null);
+        }
+        catch (UnknownImageFormatException)
+        {
+            return (false, null, "Nội dung tệp không phải là ảnh hợp lệ (JPG, PNG, WEBP).");
+        }
+        catch (InvalidImageContentException)
+        {
+            return (false, null, "Tệp ảnh bị hỏng hoặc không thể giải mã.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Avatar upload decode failed for AccountId={AccountId}", accountId);
+            return (false, null, "Không thể xử lý ảnh tải lên. Vui lòng thử một ảnh khác.");
+        }
+    }
+
+    private string GetAvatarUploadDirectory()
+    {
+        string? webRoot = _environment?.WebRootPath;
+        if (string.IsNullOrWhiteSpace(webRoot))
+        {
+            webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        }
+
+        return Path.Combine(webRoot, "uploads", "avatars");
+    }
+
+    private void TryDeletePreviousUploadedAvatar(int accountId, string relativeUrl)
+    {
+        try
+        {
+            string fileName = Path.GetFileName(relativeUrl);
+            if (string.IsNullOrWhiteSpace(fileName) ||
+                !fileName.StartsWith($"spk-avatar-{accountId}-", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            string avatarsRoot = Path.GetFullPath(GetAvatarUploadDirectory());
+            string candidate = Path.GetFullPath(Path.Combine(avatarsRoot, fileName));
+            if (candidate.StartsWith(avatarsRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                System.IO.File.Exists(candidate))
+            {
+                System.IO.File.Delete(candidate);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed cleaning up replaced avatar file");
+        }
     }
 
     [Authorize]

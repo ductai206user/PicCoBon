@@ -35,8 +35,20 @@ public static class Function
     public static string _Username =>
         CurrentUser?.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
 
-    public static string _FullName =>
-        CurrentUser?.FindFirst("FullName")?.Value ?? string.Empty;
+    public static string _FullName
+    {
+        get
+        {
+            var httpContext = _httpContextAccessor?.HttpContext;
+            if (httpContext?.Items.TryGetValue("CurrentFullName", out var itemVal) == true &&
+                itemVal is string liveFullName &&
+                !string.IsNullOrEmpty(liveFullName))
+            {
+                return liveFullName;
+            }
+            return CurrentUser?.FindFirst("FullName")?.Value ?? string.Empty;
+        }
+    }
 
     public static string _Email =>
         CurrentUser?.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
@@ -53,8 +65,70 @@ public static class Function
         }
     }
 
-    public static string _Avatar =>
-        CurrentUser?.FindFirst("Avatar")?.Value ?? string.Empty;
+    public static string _Avatar
+    {
+        get
+        {
+            var httpContext = _httpContextAccessor?.HttpContext;
+            if (httpContext?.Items.TryGetValue("CurrentAvatar", out var itemVal) == true &&
+                itemVal is string liveAvatar)
+            {
+                return GetSafeAvatarUrl(liveAvatar);
+            }
+            return GetSafeAvatarUrl(CurrentUser?.FindFirst("Avatar")?.Value);
+        }
+    }
+
+    public static string _Initials =>
+        GetAvatarInitials(_FullName, _Username);
+
+    public static string GetSafeAvatarUrl(string? avatar)
+    {
+        if (string.IsNullOrWhiteSpace(avatar))
+        {
+            return string.Empty;
+        }
+
+        string trimmed = avatar.Trim();
+        if (trimmed.Length > 500 ||
+            trimmed.Contains('\r') ||
+            trimmed.Contains('\n') ||
+            trimmed.Contains('\0'))
+        {
+            return string.Empty;
+        }
+
+        if (trimmed.StartsWith("/", StringComparison.Ordinal))
+        {
+            if (trimmed.StartsWith("//", StringComparison.Ordinal) ||
+                trimmed.StartsWith("/\\", StringComparison.Ordinal) ||
+                trimmed.Contains("..", StringComparison.Ordinal))
+            {
+                return string.Empty;
+            }
+            return trimmed;
+        }
+
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed) &&
+            (string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
+        {
+            return trimmed;
+        }
+
+        return string.Empty;
+    }
+
+    public static string GetAvatarInitials(string? fullName, string? username = null)
+    {
+        string source = !string.IsNullOrWhiteSpace(fullName)
+            ? fullName.Trim()
+            : (!string.IsNullOrWhiteSpace(username) ? username.Trim() : string.Empty);
+
+        return string.IsNullOrEmpty(source)
+            ? "U"
+            : source[..1].ToUpperInvariant();
+    }
 
     public static string _SkillLevel =>
         CurrentUser?.FindFirst("SkillLevel")?.Value ?? string.Empty;
@@ -95,7 +169,7 @@ public static class Function
             new(ClaimTypes.MobilePhone, account.Phone ?? string.Empty),
             new("RoleId", roleId.ToString()),
             new(ClaimTypes.Role, roleName),
-            new("Avatar", account.Avatar ?? string.Empty),
+            new("Avatar", GetSafeAvatarUrl(account.Avatar)),
             new("SkillLevel", account.SkillLevel ?? string.Empty),
             new("SecurityStamp", account.SecurityStamp ?? string.Empty),
             new("MustChangePassword", account.MustChangePassword ? "true" : "false")

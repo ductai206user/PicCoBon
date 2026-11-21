@@ -51,6 +51,7 @@ builder.Services.AddDataProtection();
 builder.Services.AddMemoryCache();
 
 builder.Services.Configure<PayPalOptions>(builder.Configuration.GetSection(PayPalOptions.SectionName));
+builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
 
 // P1-17: Consistent Anti-Forgery protection across forms and JSON API endpoints (RequestVerificationToken header)
 builder.Services.AddAntiforgery(options =>
@@ -78,6 +79,12 @@ builder.Services.AddHttpClient<IPayPalClient, PayPalClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(25);
 });
 builder.Services.AddScoped<PayPalPaymentService>();
+builder.Services.AddScoped<SpikeAssistantToolService>();
+builder.Services.AddHttpClient<IGeminiClient, GeminiClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddScoped<IAiAssistantService, GeminiAssistantService>();
 
 if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true) && !builder.Environment.IsEnvironment("Testing"))
 {
@@ -131,6 +138,35 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             context.HttpContext.Items["MustChangePassword"] = acc.MustChangePassword;
+
+            string liveAvatar = Function.GetSafeAvatarUrl(acc.Avatar);
+            string liveFullName = string.IsNullOrWhiteSpace(acc.FullName)
+                ? (acc.Username ?? string.Empty)
+                : acc.FullName;
+
+            context.HttpContext.Items["CurrentAvatar"] = liveAvatar;
+            context.HttpContext.Items["CurrentFullName"] = liveFullName;
+
+            var claimAvatar = context.Principal?.FindFirst("Avatar")?.Value ?? string.Empty;
+            var claimFullName = context.Principal?.FindFirst("FullName")?.Value ?? string.Empty;
+            if (!string.Equals(claimAvatar, liveAvatar, StringComparison.Ordinal) ||
+                !string.Equals(claimFullName, liveFullName, StringComparison.Ordinal))
+            {
+                if (context.Principal?.Identity is ClaimsIdentity identity)
+                {
+                    var cloned = identity.Clone();
+                    var oldAvatarClaim = cloned.FindFirst("Avatar");
+                    if (oldAvatarClaim != null) cloned.RemoveClaim(oldAvatarClaim);
+                    cloned.AddClaim(new Claim("Avatar", liveAvatar));
+
+                    var oldNameClaim = cloned.FindFirst("FullName");
+                    if (oldNameClaim != null) cloned.RemoveClaim(oldNameClaim);
+                    cloned.AddClaim(new Claim("FullName", liveFullName));
+
+                    context.ReplacePrincipal(new ClaimsPrincipal(cloned));
+                    context.ShouldRenew = true;
+                }
+            }
         };
 
         options.Events.OnRedirectToLogin = context =>
@@ -217,6 +253,7 @@ builder.Services.AddRateLimiter(options =>
             var p when p.Contains("/api/bookings") => "booking.create",
             var p when p.Contains("/api/payments/paypal") => "paypal.checkout",
             var p when p.Contains("/api/checkin") => "checkin.scan",
+            var p when p.Contains("/api/assistant") => "assistant.chat",
             _ => "general"
         };
 
@@ -272,6 +309,19 @@ builder.Services.AddRateLimiter(options =>
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = builder.Configuration.GetValue("RateLimiting:PayPalPermitLimit", 30),
+            Window = TimeSpan.FromMinutes(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
+    options.AddPolicy("AssistantLimiter", httpContext =>
+    {
+        string key = ResolveTrustedClientPartition(httpContext, isDevOrTesting);
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = builder.Configuration.GetValue("RateLimiting:AssistantPermitLimit", 18),
             Window = TimeSpan.FromMinutes(1),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             QueueLimit = 0,

@@ -23,6 +23,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Phùng Đức Tài">
     <meta name="csrf-token" content="@csrfTokens.RequestToken">
     <title>@(ViewData["Title"] ?? "Spike OS — Hệ Thống Đặt Sân & Quản Trị CLB Pickleball")</title>
     <link rel="icon" type="image/png" href="/assets/spike-favicon.png">
@@ -57,11 +58,10 @@
                 <div id="headerAuthActionsMount">
                     @if (Function.IsLogin())
                     {
-                        var initials = string.IsNullOrWhiteSpace(Function._FullName) ? "U" : Function._FullName.Trim().Substring(0, 1).ToUpperInvariant();
                         <div style="display:inline-flex;align-items:center;gap:6px;">
                             <a href="/Account/Profile" class="sn-nav-user" title="Hồ sơ cá nhân">
-                                <span class="sn-nav-user-badge">@initials</span>
-                                <span class="sn-nav-user-text">@Function._FullName</span>
+                                @await Html.PartialAsync("_UserAvatar", new ViewDataDictionary(ViewData) { ["AvatarSizeClass"] = "spk-user-avatar--nav" })
+                                <span class="sn-nav-user-text" data-global-user-name="true">@Function._FullName</span>
                             </a>
                             <a href="/Account/Logout" class="btn btn-xs btn-ghost" title="Đăng xuất">Thoát</a>
                         </div>
@@ -158,8 +158,8 @@
         </div>
 
         <div class="site-footer-bottom">
-            <span>© 2026 Spike Pickleball Club. Bảo lưu mọi quyền.</span>
-            <span>Mặt sân Cushion 8 lớp &amp; Đặt sân mã QR định chuẩn</span>
+            @await Html.PartialAsync("_FooterCredits")
+            <span>Spike Pickleball Club · Mặt sân Cushion 8 lớp &amp; Đặt sân mã QR định chuẩn</span>
         </div>
     </footer>
 
@@ -188,7 +188,14 @@
             try { localStorage.removeItem('pb_auth_user'); } catch (_) {}
         </script>
     }
+    <button type="button"
+            id="spikeFloatingMascot"
+            class="spk-mascot-widget"
+            aria-label="Linh vật Spike OS"
+            title="Linh vật Spike OS"></button>
+
     <script src="~/js/shared.js" asp-append-version="true"></script>
+    <script src="~/js/mascot-assistant.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
