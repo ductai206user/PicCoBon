@@ -1,5 +1,6 @@
 @using Microsoft.EntityFrameworkCore
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject Microsoft.Extensions.Options.IOptionsMonitor<PickleballClub.Configuration.DemoModeOptions> LoginDemoOptions
 @inject PickleballClub.Models.PickleballContext SsrDb
 @{
     ViewData["Title"] = "Đăng nhập & Đăng ký Hội viên — Spike OS";
@@ -94,6 +95,36 @@
                         <h2 id="authCardTitle" style="font-size:1.45rem;font-weight:800;margin-bottom:4px;">Chào mừng trở lại sân</h2>
                         <p class="text-sm text-muted">Nhập Email, Tên đăng nhập hoặc Số điện thoại hội viên để tiếp tục.</p>
                     </div>
+
+                    @if (LoginDemoOptions.CurrentValue.Enabled)
+                    {
+                        <div class="spk-demo-login-box">
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                                <span class="spk-demo-pill">DEMO MODE — Đăng nhập nhanh giả lập</span>
+                                <span class="text-xs text-muted">Không dùng mật khẩu hay tài khoản thật</span>
+                            </div>
+                            <div class="spk-demo-login-grid">
+                                <form action="/demo/switch-role" method="post" style="margin:0;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="role" value="user" />
+                                    <input type="hidden" name="returnUrl" value="/Account/Profile" />
+                                    <button type="submit" class="btn btn-sm btn-secondary btn-block">Hội viên Demo</button>
+                                </form>
+                                <form action="/demo/switch-role" method="post" style="margin:0;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="role" value="staff" />
+                                    <input type="hidden" name="returnUrl" value="/Management" />
+                                    <button type="submit" class="btn btn-sm btn-secondary btn-block">Staff Demo</button>
+                                </form>
+                                <form action="/demo/switch-role" method="post" style="margin:0;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="role" value="admin" />
+                                    <input type="hidden" name="returnUrl" value="/Admin" />
+                                    <button type="submit" class="btn btn-sm btn-primary btn-block">Admin Demo</button>
+                                </form>
+                            </div>
+                        </div>
+                    }
 
                     <div id="loginErrorAlert" class="sn-alert sn-alert-danger" style="@(!string.IsNullOrEmpty(serverAuthError) ? "display:flex;" : "display:none;")">
                         <iconify-icon icon="lucide:alert-triangle" width="17"></iconify-icon>

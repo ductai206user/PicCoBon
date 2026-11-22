@@ -6,6 +6,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using PickleballClub.Configuration;
 using QRCoder;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -24,7 +26,8 @@ public class QrTokenService
     public QrTokenService(
         IConfiguration configuration,
         IHostEnvironment? environment = null,
-        ILogger<QrTokenService>? logger = null)
+        ILogger<QrTokenService>? logger = null,
+        IOptions<DemoModeOptions>? demoOptions = null)
     {
         _logger = logger ?? NullLogger<QrTokenService>.Instance;
         string? configuredKey = configuration["Security:QrSigningKey"];
@@ -33,6 +36,8 @@ public class QrTokenService
             configuredKey = Environment.GetEnvironmentVariable("SPIKE_QR_SIGNING_KEY");
         }
 
+        bool isDemoMode = demoOptions?.Value?.Enabled == true ||
+                          configuration.GetValue("DemoMode:Enabled", false);
         bool isDevOrTest = environment == null ||
                            environment.IsDevelopment() ||
                            environment.IsEnvironment("SqlDebug") ||
@@ -45,15 +50,23 @@ public class QrTokenService
 
         if (string.IsNullOrWhiteSpace(configuredKey) || configuredKey.Trim().Length < 32 || (!isDevOrTest && isPlaceholderKey))
         {
-            if (!isDevOrTest)
+            if (isDemoMode)
+            {
+                // Generate an ephemeral per-process HMAC key in DemoMode so Production container boots without real signing secrets
+                configuredKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                _logger.LogInformation("DemoMode active: using ephemeral per-process QR signing key (demo tokens only)");
+            }
+            else if (!isDevOrTest)
             {
                 _logger.LogCritical("Missing or weak Security:QrSigningKey configuration in non-development environment");
                 throw new InvalidOperationException(
                     "CRITICAL SECURITY CONFIGURATION ERROR: 'Security:QrSigningKey' (or environment variable 'SPIKE_QR_SIGNING_KEY') " +
                     "must be configured with a non-placeholder secret of at least 32 characters in Production/Staging environments.");
             }
-
-            configuredKey = DevOnlyFallbackKey;
+            else
+            {
+                configuredKey = DevOnlyFallbackKey;
+            }
         }
 
         _secretKey = Encoding.UTF8.GetBytes(configuredKey.Trim());

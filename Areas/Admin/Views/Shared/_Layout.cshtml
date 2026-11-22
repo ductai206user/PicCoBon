@@ -1,5 +1,6 @@
 @using PickleballClub.Utilities
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject Microsoft.Extensions.Options.IOptionsMonitor<PickleballClub.Configuration.DemoModeOptions> AdminDemoOptions
 @{
     var currentPath = Context.Request.Path.Value?.ToLowerInvariant() ?? "";
     var csrfTokens = Antiforgery.GetAndStoreTokens(Context);
@@ -30,6 +31,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="Phùng Đức Tài">
     <meta name="csrf-token" content="@csrfTokens.RequestToken">
+    @if (AdminDemoOptions.CurrentValue.Enabled)
+    {
+        <meta name="spike-demo-mode" content="true">
+    }
     <title>@pageTitle — Spike OS Workspace</title>
     <link rel="icon" type="image/png" href="/assets/spike-favicon.png">
     <script>
@@ -248,6 +253,7 @@
                     </div>
                 </div>
             </header>
+            @await Html.PartialAsync("~/Views/Shared/_DemoBanner.cshtml")
 
             <main class="sh-admin-main admin-page-shell" id="shAdminMainContent">
                 @RenderBody()

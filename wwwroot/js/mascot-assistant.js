@@ -189,6 +189,9 @@
       panel.setAttribute('aria-label', 'Trợ lý AI Spike Assistant');
       panel.setAttribute('aria-hidden', 'true');
 
+      const isDemoMode = document.querySelector('meta[name="spike-demo-mode"]')?.content === 'true';
+      const statusSubtitle = isDemoMode ? 'AI Demo — Phản hồi giả lập' : 'Gemini AI • Dữ liệu Spike OS';
+
       panel.innerHTML = `
         <header class="spk-ai-header">
           <div class="spk-ai-header-info">
@@ -199,7 +202,7 @@
               <span class="spk-ai-header-title">Spike Assistant</span>
               <span class="spk-ai-header-status">
                 <span class="spk-ai-status-dot"></span>
-                <span>Gemini AI • Dữ liệu Spike OS</span>
+                <span>${statusSubtitle}</span>
               </span>
             </div>
           </div>

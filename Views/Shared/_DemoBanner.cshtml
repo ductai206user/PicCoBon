@@ -1,0 +1,56 @@
+@inject Microsoft.Extensions.Options.IOptionsMonitor<PickleballClub.Configuration.DemoModeOptions> DemoOptions
+@using PickleballClub.Utilities
+@{
+    var demoCfg = DemoOptions.CurrentValue;
+    if (!demoCfg.Enabled)
+    {
+        return;
+    }
+
+    string currentReturnUrl = (Context.Request.Path.Value ?? "/") + (Context.Request.QueryString.Value ?? string.Empty);
+    bool isMemberActive = Function.IsLogin() && Function._RoleId == 2;
+    bool isStaffActive = Function.IsLogin() && Function._RoleId == 3;
+    bool isAdminActive = Function.IsLogin() && Function._RoleId == 1;
+    bool isGuestActive = !Function.IsLogin();
+    string? demoNotice = TempData["DemoNotice"] as string;
+}
+
+<div class="spk-demo-bar" role="region" aria-label="Thông tin chế độ Demo">
+    <div class="spk-demo-bar-inner">
+        <div class="spk-demo-bar-status">
+            <span class="spk-demo-pill">DEMO MODE</span>
+            <span>Dữ liệu mô phỏng InMemory — Đã tắt SQL Server, đặt sân/thanh toán thật, PayPal &amp; Gemini API.</span>
+        </div>
+        <div class="spk-demo-bar-roles">
+            <span style="color:var(--text-muted);font-weight:600;">Xem trước vai trò:</span>
+            <form action="/demo/switch-role" method="post" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="role" value="guest" />
+                <input type="hidden" name="returnUrl" value="/" />
+                <button type="submit" class="spk-demo-role-chip @(isGuestActive ? "is-active" : "")">Khách</button>
+            </form>
+            <form action="/demo/switch-role" method="post" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="role" value="user" />
+                <input type="hidden" name="returnUrl" value="/Account/Profile" />
+                <button type="submit" class="spk-demo-role-chip @(isMemberActive ? "is-active" : "")">Hội viên Demo</button>
+            </form>
+            <form action="/demo/switch-role" method="post" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="role" value="staff" />
+                <input type="hidden" name="returnUrl" value="/Management" />
+                <button type="submit" class="spk-demo-role-chip @(isStaffActive ? "is-active" : "")">Staff Demo</button>
+            </form>
+            <form action="/demo/switch-role" method="post" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="role" value="admin" />
+                <input type="hidden" name="returnUrl" value="/Admin" />
+                <button type="submit" class="spk-demo-role-chip @(isAdminActive ? "is-active" : "")">Admin Demo</button>
+            </form>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(demoNotice))
+    {
+        <div class="spk-demo-notice-toast" role="status">@demoNotice</div>
+    }
+</div>

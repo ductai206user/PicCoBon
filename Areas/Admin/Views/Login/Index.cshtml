@@ -1,4 +1,5 @@
 @model PickleballClub.Models.TbAccount
+@inject Microsoft.Extensions.Options.IOptionsMonitor<PickleballClub.Configuration.DemoModeOptions> AdminLoginDemoOptions
 @{
     Layout = null;
     var authError = TempData["AuthError"] as string;
@@ -22,6 +23,30 @@
             <h1 class="sh-auth-title">Cổng Quản Trị CLB</h1>
             <p class="sh-auth-sub">Đăng nhập hệ thống điều hành Spike Pickleball Club</p>
         </div>
+
+        @if (AdminLoginDemoOptions.CurrentValue.Enabled)
+        {
+            <div class="spk-demo-login-box">
+                <div style="margin-bottom:8px;">
+                    <span class="spk-demo-pill">DEMO MODE</span>
+                    <span style="font-size:0.78rem;color:var(--text-secondary);margin-left:4px;">Xem trước bằng tài khoản giả lập (không truy cập dữ liệu thật)</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <form action="/demo/switch-role" method="post" style="flex:1;margin:0;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="role" value="admin" />
+                        <input type="hidden" name="returnUrl" value="/Admin" />
+                        <button type="submit" class="btn btn-primary btn-sm btn-block">Vào Admin Demo</button>
+                    </form>
+                    <form action="/demo/switch-role" method="post" style="flex:1;margin:0;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="role" value="staff" />
+                        <input type="hidden" name="returnUrl" value="/Management" />
+                        <button type="submit" class="btn btn-secondary btn-sm btn-block">Vào Staff Demo</button>
+                    </form>
+                </div>
+            </div>
+        }
 
         <form asp-area="Admin" asp-controller="Login" asp-action="Index" method="post">
             @Html.AntiForgeryToken()

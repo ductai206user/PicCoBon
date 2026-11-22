@@ -22,27 +22,47 @@ public class AssistantController : ControllerBase
 
     private readonly IAiAssistantService _assistantService;
     private readonly GeminiOptions _options;
+    private readonly Microsoft.Extensions.Options.IOptionsMonitor<DemoModeOptions>? _demoOptions;
     private readonly ILogger<AssistantController> _logger;
 
     public AssistantController(
         IAiAssistantService assistantService,
         IOptions<GeminiOptions> options,
-        ILogger<AssistantController>? logger = null)
+        ILogger<AssistantController>? logger = null,
+        Microsoft.Extensions.Options.IOptionsMonitor<DemoModeOptions>? demoOptions = null)
     {
         _assistantService = assistantService;
         _options = options.Value;
+        _demoOptions = demoOptions;
         _logger = logger ?? NullLogger<AssistantController>.Instance;
     }
 
     [HttpGet("status")]
     public IActionResult GetStatus()
     {
+        bool isDemoMode = _demoOptions?.CurrentValue.Enabled ?? false;
+        if (isDemoMode)
+        {
+            return Ok(new
+            {
+                ok = true,
+                enabled = true,
+                ready = true,
+                demoMode = true,
+                statusCode = "DEMO_MODE",
+                welcomeMessage = "Xin chào! 🏓 Mình là Spike Assistant (AI Demo — Phản hồi giả lập). Không kết nối Gemini API hay CSDL thật.",
+                privacyNotice = "AI Demo — Phản hồi giả lập trên dữ liệu mẫu.",
+                suggestedQuestions = GeminiAssistantService.GetDefaultSuggestions(false)
+            });
+        }
+
         var (isValid, errorCode, _) = _options.Validate();
         return Ok(new
         {
             ok = true,
             enabled = _options.Enabled,
             ready = isValid,
+            demoMode = false,
             statusCode = isValid ? "READY" : errorCode,
             welcomeMessage = "Xin chào! 🏓 Mình là Spike Assistant. Mình có thể giúp bạn tìm sân, xem giá, tìm sản phẩm và hướng dẫn sử dụng Spike OS.",
             privacyNotice = "Trợ lý AI dùng dữ liệu Spike OS. Không nhập mật khẩu hoặc mã OTP.",

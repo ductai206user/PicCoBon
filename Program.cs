@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Core.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -16,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using PickleballClub.Configuration;
+using PickleballClub.Filters;
 using PickleballClub.Logging;
 using PickleballClub.Models;
 using PickleballClub.Services;
@@ -34,22 +36,58 @@ if (isSqlDebugRequested && !builder.Environment.IsEnvironment("SqlDebug"))
     builder.Configuration.AddJsonFile("appsettings.SqlDebug.json", optional: true, reloadOnChange: true);
 }
 
+bool demoModeEnabled =
+    !isSqlDebugRequested &&
+    !builder.Environment.IsEnvironment("Testing") &&
+    (builder.Configuration.GetValue("DemoMode:Enabled", false) ||
+     args.Contains("--demo", StringComparer.OrdinalIgnoreCase) ||
+     string.Equals(Environment.GetEnvironmentVariable("SPIKE_DEMO_MODE"), "true", StringComparison.OrdinalIgnoreCase));
+
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    string? renderPort = Environment.GetEnvironmentVariable("PORT");
+    string? explicitAspUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+    if (int.TryParse(renderPort, out int parsedPort) && parsedPort > 0 && parsedPort <= 65535)
+    {
+        builder.WebHost.UseUrls($"http://0.0.0.0:{parsedPort}");
+    }
+    else if (demoModeEnabled && string.IsNullOrWhiteSpace(explicitAspUrls))
+    {
+        builder.WebHost.UseUrls("http://0.0.0.0:10000");
+    }
+}
+
 builder.Logging.AddConsoleFormatter<CleanSpikeConsoleFormatter, CleanSpikeConsoleFormatterOptions>();
 
 bool isDevOrTesting = builder.Environment.IsDevelopment() ||
                       builder.Environment.IsEnvironment("SqlDebug") ||
                       builder.Environment.IsEnvironment("Testing");
-var cookieSecurePolicy = isDevOrTesting ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+var cookieSecurePolicy = (isDevOrTesting || demoModeEnabled) ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 
 // Add services to the container.
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add<CsrfFailureResultFilter>();
+    if (demoModeEnabled)
+    {
+        options.Filters.Add<DemoModeWriteGuardFilter>();
+    }
+});
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddDataProtection();
 builder.Services.AddMemoryCache();
 
+builder.Services.Configure<DemoModeOptions>(builder.Configuration.GetSection(DemoModeOptions.SectionName));
+if (demoModeEnabled)
+{
+    builder.Services.PostConfigure<DemoModeOptions>(opts => opts.Enabled = true);
+}
 builder.Services.Configure<PayPalOptions>(builder.Configuration.GetSection(PayPalOptions.SectionName));
 builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
 
@@ -63,8 +101,16 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = cookieSecurePolicy;
 });
 
-builder.Services.AddDbContext<PickleballContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+if (demoModeEnabled)
+{
+    builder.Services.AddDbContext<PickleballContext>(options =>
+        options.UseInMemoryDatabase("SpikeOsDemoInMemory"));
+}
+else
+{
+    builder.Services.AddDbContext<PickleballContext>(options =>
+        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+}
 
 // Register Domain & Security Services
 builder.Services.AddSingleton<PasswordService>();
@@ -80,13 +126,20 @@ builder.Services.AddHttpClient<IPayPalClient, PayPalClient>(client =>
 });
 builder.Services.AddScoped<PayPalPaymentService>();
 builder.Services.AddScoped<SpikeAssistantToolService>();
-builder.Services.AddHttpClient<IGeminiClient, GeminiClient>(client =>
+if (demoModeEnabled)
 {
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-builder.Services.AddScoped<IAiAssistantService, GeminiAssistantService>();
+    builder.Services.AddScoped<IAiAssistantService, DemoAiAssistantService>();
+}
+else
+{
+    builder.Services.AddHttpClient<IGeminiClient, GeminiClient>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
+    builder.Services.AddScoped<IAiAssistantService, GeminiAssistantService>();
+}
 
-if (builder.Configuration.GetValue("BackgroundWorkers:Enabled", true) && !builder.Environment.IsEnvironment("Testing"))
+if (!demoModeEnabled && builder.Configuration.GetValue("BackgroundWorkers:Enabled", true) && !builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddHostedService<BookingLifecycleWorker>();
     builder.Services.AddHostedService<PayPalReconciliationWorker>();
@@ -358,7 +411,8 @@ if (args.Contains("--migrate", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
-if ((app.Environment.IsDevelopment() || app.Environment.IsEnvironment("SqlDebug")) &&
+if (!demoModeEnabled &&
+    (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("SqlDebug")) &&
     app.Configuration.GetValue("Database:AutoMigrateInDevelopment", true))
 {
     using var scope = app.Services.CreateScope();
@@ -445,7 +499,11 @@ app.Use(async (context, next) =>
     }
 });
 
-app.UseHttpsRedirection();
+app.UseForwardedHeaders();
+if (!demoModeEnabled)
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 app.UseRouting();
 
@@ -540,6 +598,18 @@ app.Use(async (context, next) =>
 // P2-08: Operational Health Endpoint (zero PII or connection string disclosure)
 app.MapGet("/health", async (PickleballContext db) =>
 {
+    if (demoModeEnabled)
+    {
+        return Results.Ok(new
+        {
+            status = "Healthy",
+            mode = "DemoMode",
+            database = "InMemory-Mock",
+            environment = app.Environment.EnvironmentName,
+            timestampUtc = DateTime.UtcNow
+        });
+    }
+
     try
     {
         bool canConnect = await db.Database.CanConnectAsync();
@@ -588,35 +658,46 @@ if (!app.Environment.IsEnvironment("Testing"))
     var dbLogger = bootScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Microsoft.EntityFrameworkCore.SpikeStartup");
     var payPalLogger = bootScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("PickleballClub.Services.PayPalPaymentService");
 
-    bootLogger.LogInformation("Spike OS initialized (Environment={Environment}, SqlDebug={SqlDebug})",
-        app.Environment.EnvironmentName, isSqlDebugRequested);
+    bootLogger.LogInformation("Spike OS initialized (Environment={Environment}, SqlDebug={SqlDebug}, DemoMode={DemoMode})",
+        app.Environment.EnvironmentName, isSqlDebugRequested, demoModeEnabled);
 
     try
     {
         var db = bootScope.ServiceProvider.GetRequiredService<PickleballContext>();
-        if (db.Database.IsRelational())
+        if (demoModeEnabled)
         {
-            if (await db.Database.CanConnectAsync())
-            {
-                dbLogger.LogInformation("Database connection verified");
-            }
-            else
-            {
-                dbLogger.LogWarning("Database connection unreachable at startup");
-            }
-        }
-
-        var payPalService = bootScope.ServiceProvider.GetRequiredService<PayPalPaymentService>();
-        var readiness = await payPalService.ValidateCheckoutReadinessAsync(db);
-        if (readiness.IsReady)
-        {
-            var ppOpts = bootScope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayPalOptions>>().Value;
-            payPalLogger.LogInformation("PayPal gateway ready (Env={PayPalEnv}, Currency={Currency}, Rate={Rate})",
-                ppOpts.Environment, ppOpts.Currency, ppOpts.VndPerUsd);
+            var pwdSvc = bootScope.ServiceProvider.GetRequiredService<PasswordService>();
+            var qrSvc = bootScope.ServiceProvider.GetRequiredService<QrTokenService>();
+            await DemoDataSeeder.SeedAsync(db, pwdSvc, qrSvc, bootLogger);
+            dbLogger.LogInformation("DemoMode InMemory database ready (SQL Server disabled)");
+            payPalLogger.LogInformation("PayPal gateway disabled in DemoMode");
         }
         else
         {
-            payPalLogger.LogWarning("PayPal gateway inactive at startup: Code={ErrorCode}", readiness.ErrorCode);
+            if (db.Database.IsRelational())
+            {
+                if (await db.Database.CanConnectAsync())
+                {
+                    dbLogger.LogInformation("Database connection verified");
+                }
+                else
+                {
+                    dbLogger.LogWarning("Database connection unreachable at startup");
+                }
+            }
+
+            var payPalService = bootScope.ServiceProvider.GetRequiredService<PayPalPaymentService>();
+            var readiness = await payPalService.ValidateCheckoutReadinessAsync(db);
+            if (readiness.IsReady)
+            {
+                var ppOpts = bootScope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<PayPalOptions>>().Value;
+                payPalLogger.LogInformation("PayPal gateway ready (Env={PayPalEnv}, Currency={Currency}, Rate={Rate})",
+                    ppOpts.Environment, ppOpts.Currency, ppOpts.VndPerUsd);
+            }
+            else
+            {
+                payPalLogger.LogWarning("PayPal gateway inactive at startup: Code={ErrorCode}", readiness.ErrorCode);
+            }
         }
     }
     catch (Exception ex)

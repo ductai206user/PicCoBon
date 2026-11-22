@@ -1,5 +1,6 @@
 @using Microsoft.EntityFrameworkCore
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject Microsoft.Extensions.Options.IOptionsMonitor<PickleballClub.Configuration.DemoModeOptions> LayoutDemoOptions
 @inject PickleballClub.Services.ClubSettingsService ClubSettingsService
 @inject PickleballClub.Models.PickleballContext SsrDb
 @{
@@ -25,6 +26,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="Phùng Đức Tài">
     <meta name="csrf-token" content="@csrfTokens.RequestToken">
+    @if (LayoutDemoOptions.CurrentValue.Enabled)
+    {
+        <meta name="spike-demo-mode" content="true">
+    }
     <title>@(ViewData["Title"] ?? "Spike OS — Hệ Thống Đặt Sân & Quản Trị CLB Pickleball")</title>
     <link rel="icon" type="image/png" href="/assets/spike-favicon.png">
     <script>
@@ -43,6 +48,7 @@
 </head>
 <body>
     <a href="#mainContent" class="sr-only">Chuyển tới nội dung chính</a>
+    @await Html.PartialAsync("_DemoBanner")
 
     <header class="site-header">
         <div class="site-header-inner">

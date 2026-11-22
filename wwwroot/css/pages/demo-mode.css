@@ -1,0 +1,101 @@
+/* ==========================================================================
+   SPIKE OS — DEMO MODE BANNER & ROLE SWITCHER STYLES
+   ========================================================================== */
+.spk-demo-bar {
+  background: linear-gradient(90deg, rgba(46, 139, 87, 0.12), rgba(107, 203, 119, 0.14));
+  border-bottom: 1px solid var(--brand-primary-border, rgba(46, 139, 87, 0.28));
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  padding: 6px 16px;
+}
+
+.spk-demo-bar-inner {
+  max-width: var(--container-max, 1320px);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.spk-demo-bar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.spk-demo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: var(--brand-primary, #2E8B57);
+  color: #FFFFFF;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.spk-demo-bar-roles {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.spk-demo-role-chip {
+  border: 1px solid var(--border-default);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 3px 9px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.spk-demo-role-chip:hover,
+.spk-demo-role-chip.is-active {
+  background: var(--brand-primary-tint, rgba(46, 139, 87, 0.12));
+  border-color: var(--brand-primary, #2E8B57);
+  color: var(--brand-primary-ink, #1F6B43);
+}
+
+.spk-demo-notice-toast {
+  max-width: var(--container-max, 1320px);
+  margin: 8px auto 0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.spk-demo-login-box {
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--brand-primary-border, rgba(46, 139, 87, 0.35));
+  background: var(--brand-primary-tint, rgba(46, 139, 87, 0.08));
+}
+
+.spk-demo-login-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 560px) {
+  .spk-demo-login-grid {
+    grid-template-columns: 1fr;
+  }
+}
