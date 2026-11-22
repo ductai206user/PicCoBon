@@ -45,7 +45,7 @@ public class AssistantController : ControllerBase
             ready = isValid,
             statusCode = isValid ? "READY" : errorCode,
             welcomeMessage = "Xin chào! 🏓 Mình là Spike Assistant. Mình có thể giúp bạn tìm sân, xem giá, tìm sản phẩm và hướng dẫn sử dụng Spike OS.",
-            privacyNotice = "Tin nhắn được xử lý qua Google Gemini AI dựa trên dữ liệu xác thực của Spike OS. Không nhập mật khẩu hoặc thông tin nhạy cảm.",
+            privacyNotice = "Trợ lý AI dùng dữ liệu Spike OS. Không nhập mật khẩu hoặc mã OTP.",
             suggestedQuestions = GeminiAssistantService.GetDefaultSuggestions(false)
         });
     }

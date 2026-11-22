@@ -135,7 +135,13 @@
       }
 
       const badgeHtml = this.options.enableChatWidget
-        ? '<span class="spk-mascot-badge" aria-hidden="true">Hỏi AI</span>'
+        ? `<span class="spk-mascot-badge" aria-hidden="true">
+             <svg class="spk-mascot-badge-icon" viewBox="0 0 16 16" width="13" height="13" fill="none">
+               <path d="M8 1.5L9.6 5.6L13.8 7.2L9.6 8.8L8 13L6.4 8.8L2.2 7.2L6.4 5.6L8 1.5Z" fill="currentColor"/>
+               <path d="M13.2 1.8L13.7 3.1L15 3.6L13.7 4.1L13.2 5.4L12.7 4.1L11.4 3.6L12.7 3.1L13.2 1.8Z" fill="currentColor" opacity="0.8"/>
+             </svg>
+             <span>Hỏi Spike AI</span>
+           </span>`
         : '';
 
       let motionEl = this.root.querySelector('.spk-mascot-motion');
@@ -187,22 +193,22 @@
         <header class="spk-ai-header">
           <div class="spk-ai-header-info">
             <span class="spk-ai-header-avatar">
-              <img id="spikeAssistantHeaderImg" src="${POSE_CATALOG.wave.src}" alt="Spike Assistant" width="36" height="36" />
+              <img id="spikeAssistantHeaderImg" src="${POSE_CATALOG.wave.src}" alt="Spike Assistant" width="38" height="38" />
             </span>
             <div class="spk-ai-header-text">
               <span class="spk-ai-header-title">Spike Assistant</span>
               <span class="spk-ai-header-status">
                 <span class="spk-ai-status-dot"></span>
-                <span>Gemini AI · Dữ liệu CLB trực tiếp</span>
+                <span>Gemini AI • Dữ liệu Spike OS</span>
               </span>
             </div>
           </div>
           <div class="spk-ai-header-actions">
             <button type="button" class="spk-ai-icon-btn" id="spikeAssistantResetBtn" title="Làm mới hội thoại" aria-label="Làm mới hội thoại">
-              <iconify-icon icon="lucide:rotate-ccw" width="15"></iconify-icon>
+              <iconify-icon icon="lucide:rotate-ccw" width="14"></iconify-icon>
             </button>
             <button type="button" class="spk-ai-icon-btn" id="spikeAssistantCloseBtn" title="Đóng khung chat" aria-label="Đóng khung chat">
-              <iconify-icon icon="lucide:x" width="17"></iconify-icon>
+              <iconify-icon icon="lucide:x" width="16"></iconify-icon>
             </button>
           </div>
         </header>
@@ -226,11 +232,11 @@
                    placeholder="Hỏi về sân trống, bảng giá, Pro Shop, vé QR..."
                    aria-label="Nhập câu hỏi cho Spike Assistant" />
             <button type="submit" class="spk-ai-send-btn" id="spikeAssistantSendBtn" title="Gửi câu hỏi" aria-label="Gửi câu hỏi">
-              <iconify-icon icon="lucide:send" width="16"></iconify-icon>
+              <iconify-icon icon="lucide:arrow-up" width="17"></iconify-icon>
             </button>
           </form>
           <div class="spk-ai-privacy">
-            Trợ lý AI xử lý câu hỏi qua Google Gemini dựa trên dữ liệu Spike OS. Không nhập mật khẩu.
+            Trợ lý AI dùng dữ liệu Spike OS. Không nhập mật khẩu hoặc mã OTP.
           </div>
         </footer>
       `;
@@ -251,11 +257,60 @@
     _renderWelcomeMessage() {
       if (!this.messagesEl) return;
       this.messagesEl.innerHTML = '';
-      this._appendAssistantMessage(DEFAULT_WELCOME_TEXT, [
+
+      const wrap = document.createElement('div');
+      wrap.className = 'spk-ai-msg spk-ai-msg--assistant spk-ai-msg--welcome';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'spk-ai-bubble spk-ai-welcome-card';
+      bubble.innerHTML = `
+        <div class="spk-ai-welcome-head">
+          <span class="spk-ai-welcome-kicker">Trợ lý sân đấu trực tuyến</span>
+          <strong class="spk-ai-welcome-title">Xin chào! Mình là Spike Assistant 🏓</strong>
+        </div>
+        <p class="spk-ai-welcome-desc">Mình kết nối trực tiếp với dữ liệu Spike OS để hỗ trợ bạn ngay tức thì:</p>
+        <ul class="spk-ai-welcome-list">
+          <li><span class="spk-ai-welcome-bullet"></span><span>Tra cứu <strong>sân trống</strong> &amp; báo giá theo khung giờ</span></li>
+          <li><span class="spk-ai-welcome-bullet"></span><span>Tìm vợt, bóng, đồ uống tại <strong>Pro Shop</strong></span></li>
+          <li><span class="spk-ai-welcome-bullet"></span><span>Hướng dẫn đặt sân, <strong>vé QR</strong> &amp; thanh toán</span></li>
+        </ul>
+      `;
+      wrap.appendChild(bubble);
+
+      const defaultLinks = [
         { label: 'Đặt sân trực tuyến', url: '/Booking' },
         { label: 'Cửa hàng Pro Shop', url: '/Product' },
         { label: 'Tra cứu vé QR', url: '/Lookup' }
-      ]);
+      ];
+      const linksRow = document.createElement('div');
+      linksRow.className = 'spk-ai-msg-links';
+      defaultLinks.forEach(item => {
+        const a = document.createElement('a');
+        a.className = 'spk-ai-link-pill';
+        a.href = item.url;
+        a.textContent = '→ ' + item.label;
+        linksRow.appendChild(a);
+      });
+      wrap.appendChild(linksRow);
+
+      this.messagesEl.appendChild(wrap);
+    }
+
+    _resolveChipIcon(questionText) {
+      const lower = String(questionText || '').toLowerCase();
+      if (lower.includes('giá') || lower.includes('cost') || lower.includes('price') || lower.includes('ưu đãi')) {
+        return 'lucide:tag';
+      }
+      if (lower.includes('pro shop') || lower.includes('sản phẩm') || lower.includes('đồ uống') || lower.includes('products')) {
+        return 'lucide:shopping-bag';
+      }
+      if (lower.includes('qr') || lower.includes('hướng dẫn') || lower.includes('paypal')) {
+        return 'lucide:qr-code';
+      }
+      if (lower.includes('sân') || lower.includes('court') || lower.includes('19:00') || lower.includes('18:00')) {
+        return 'lucide:calendar-clock';
+      }
+      return 'lucide:sparkles';
     }
 
     _renderSuggestions(items) {
@@ -266,7 +321,17 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'spk-ai-chip';
-        btn.textContent = q;
+
+        const icon = document.createElement('iconify-icon');
+        icon.setAttribute('icon', this._resolveChipIcon(q));
+        icon.setAttribute('width', '13');
+        icon.className = 'spk-ai-chip-icon';
+
+        const label = document.createElement('span');
+        label.textContent = q;
+
+        btn.appendChild(icon);
+        btn.appendChild(label);
         btn.addEventListener('click', () => {
           this.sendMessage(q);
         });
