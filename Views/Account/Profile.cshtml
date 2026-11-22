@@ -1,4 +1,4 @@
-﻿@model PickleballClub.Models.TbAccount
+@model PickleballClub.Models.TbAccount
 @using PickleballClub.Models
 @using PickleballClub.Utilities
 @{
@@ -8,237 +8,29 @@
     double totalHours = ViewBag.TotalHours ?? 0.0;
     int totalSpent = ViewBag.TotalSpent ?? 0;
 
-    string defaultAvatar = Model.RoleId == 1
-        ? "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&q=80"
-        : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=240&q=80";
-    string currentAvatar = !string.IsNullOrWhiteSpace(Model.Avatar) ? Model.Avatar : defaultAvatar;
+    string savedAvatar = Function.GetSafeAvatarUrl(Model.Avatar);
+    string avatarInitials = Function.GetAvatarInitials(Model.FullName, Model.Username);
+    bool hasSavedAvatar = !string.IsNullOrEmpty(savedAvatar);
     string memberCode = $"SPK-{Model.AccountId:D4}";
     string tierLabel = !string.IsNullOrWhiteSpace(Model.MemberTier) ? Model.MemberTier : "Hội viên Tiêu chuẩn";
-}
 
-<style>
-    .profile-layout {
-        display: grid;
-        grid-template-columns: 360px 1fr;
-        gap: 1.75rem;
-        align-items: start;
-    }
-    @@media (max-width: 992px) {
-        .profile-layout {
-            grid-template-columns: 1fr;
-        }
-    }
-    .member-passport {
-        background: linear-gradient(155deg, #0A0E17 0%, #162038 100%);
-        border-radius: 18px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: #FFFFFF;
-        overflow: hidden;
-        box-shadow: 0 20px 45px rgba(10, 14, 23, 0.22);
-        position: sticky;
-        top: calc(var(--header-h) + 1.5rem);
-    }
-    .member-passport-banner {
-        height: 92px;
-        background: linear-gradient(120deg, #FF5520 0%, #FF8040 55%, #D4FF00 100%);
-        position: relative;
-        padding: 1rem 1.25rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-    }
-    .member-passport-code {
-        background: rgba(10, 14, 23, 0.8);
-        color: var(--color-volt);
-        font-family: var(--font-mono);
-        font-size: 0.74rem;
-        font-weight: 700;
-        padding: 0.25rem 0.65rem;
-        border-radius: 999px;
-        letter-spacing: 0.06em;
-        backdrop-filter: blur(6px);
-    }
-    .member-passport-tier {
-        background: rgba(255, 255, 255, 0.92);
-        color: #0A0E17;
-        font-size: 0.72rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        padding: 0.25rem 0.7rem;
-        border-radius: 999px;
-    }
-    .member-passport-body {
-        padding: 0 1.5rem 1.6rem;
-        text-align: center;
-    }
-    .member-avatar-wrap {
-        width: 96px;
-        height: 96px;
-        margin: -48px auto 0.85rem;
-        border-radius: 50%;
-        padding: 4px;
-        background: linear-gradient(135deg, var(--color-volt), var(--color-primary));
-        position: relative;
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
-    }
-    .member-avatar-wrap img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 50%;
-        background: #0A0E17;
-    }
-    .member-name {
-        font-family: var(--font-display);
-        font-size: 1.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-        color: #FFFFFF;
-        margin-bottom: 0.15rem;
-    }
-    .member-sub {
-        font-size: 0.82rem;
-        color: #94A3B8;
-        margin-bottom: 1.1rem;
-    }
-    .member-kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 0.55rem;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 0.85rem 0.5rem;
-        margin-bottom: 1.2rem;
-    }
-    .member-kpi-val {
-        font-family: var(--font-mono);
-        font-size: 1.05rem;
-        font-weight: 800;
-        color: var(--color-volt);
-        display: block;
-    }
-    .member-kpi-lbl {
-        font-size: 0.7rem;
-        color: #94A3B8;
-        margin-top: 2px;
-        display: block;
-    }
-    .member-specs {
-        text-align: left;
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-        padding-top: 0.9rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
-        font-size: 0.82rem;
-    }
-    .member-spec-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .member-spec-row span:first-child {
-        color: #94A3B8;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-    }
-    .member-spec-row strong {
-        color: #F8FAFC;
-        text-align: right;
-    }
-    .profile-tabs {
-        display: flex;
-        gap: 0.5rem;
-        border-bottom: 1px solid var(--border-color);
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-    }
-    .profile-tab-btn {
-        padding: 0.75rem 1.25rem;
-        font-size: 0.88rem;
-        font-weight: 700;
-        color: var(--text-secondary);
-        background: transparent;
-        border: none;
-        border-bottom: 3px solid transparent;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        transition: all 0.2s ease;
-    }
-    .profile-tab-btn:hover {
-        color: var(--text-primary);
-    }
-    .profile-tab-btn.active {
-        color: var(--color-primary);
-        border-bottom-color: var(--color-primary);
-    }
-    .profile-tab-pane {
-        display: none;
-    }
-    .profile-tab-pane.active {
-        display: block;
-    }
-    .avatar-presets {
-        display: flex;
-        gap: 0.65rem;
-        flex-wrap: wrap;
-        margin-top: 0.5rem;
-    }
-    .avatar-preset-item {
-        width: 46px;
-        height: 46px;
-        border-radius: 50%;
-        border: 2.5px solid #CBD5E1;
-        padding: 2px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: #FFF;
-    }
-    .avatar-preset-item:hover,
-    .avatar-preset-item.selected {
-        border-color: var(--color-primary);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255, 85, 32, 0.25);
-    }
-    .avatar-preset-item img {
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        object-fit: cover;
-    }
-    .paddle-chips {
-        display: flex;
-        gap: 0.4rem;
-        flex-wrap: wrap;
-        margin-top: 0.45rem;
-    }
-    .paddle-chip {
-        font-size: 0.74rem;
-        padding: 0.22rem 0.6rem;
-        border-radius: 999px;
-        background: #F1F5F9;
-        color: #475569;
-        border: 1px solid #E2E8F0;
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-    .paddle-chip:hover {
-        background: var(--color-primary-50);
-        color: var(--color-primary);
-        border-color: var(--color-primary);
-    }
-</style>
+    var cartoonAvatars = new[]
+    {
+        new { Url = "/images/avatars/sunny.png", Name = "Sunny Rally" },
+        new { Url = "/images/avatars/ace.png", Name = "Ace Dash" },
+        new { Url = "/images/avatars/mochi.png", Name = "Mochi Panda" },
+        new { Url = "/images/avatars/coco.png", Name = "Coco Shiba" },
+        new { Url = "/images/avatars/maya.png", Name = "Maya Smash" },
+        new { Url = "/images/avatars/leo.png", Name = "Leo Spin" },
+        new { Url = "/images/avatars/kiko.png", Name = "Kiko Kitty" },
+        new { Url = "/images/avatars/kai.png", Name = "Kai Bolt" }
+    };
+}
 
 <section class="page-hero">
     <div class="container page-hero-inner">
         <div>
-            <span class="section-kicker" style="color:var(--color-volt);">Thẻ Hội Viên &amp; Hồ Sơ VĐV</span>
+            <span class="section-kicker">Thẻ Hội Viên &amp; Hồ Sơ VĐV</span>
             <h1 class="page-hero-title">Hồ Sơ Cá Nhân — @Model.FullName</h1>
             <p class="page-hero-sub">Cập nhật thông tin liên hệ, thông số vận động viên Pickleball (DUPR, tay thuận, dòng vợt) và quản lý lịch đặt sân</p>
         </div>
@@ -259,18 +51,19 @@
     <div class="container">
         @if (TempData["ProfileSuccess"] != null)
         {
-            <div style="background:#ECFDF5;border:1px solid #A7F3D0;color:#065F46;padding:0.95rem 1.25rem;border-radius:12px;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.65rem;font-weight:600;font-size:0.9rem;">
-                <iconify-icon icon="lucide:check-circle-2" width="20" style="color:#059669;flex-shrink:0;"></iconify-icon>
+            <div class="sh-alert-success" data-server-profile-alert="true" style="display:flex;align-items:center;gap:0.65rem;">
+                <iconify-icon icon="lucide:check-circle-2" width="20" style="color:var(--color-success);flex-shrink:0;"></iconify-icon>
                 <span>@TempData["ProfileSuccess"]</span>
             </div>
         }
         @if (TempData["ProfileError"] != null)
         {
-            <div style="background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;padding:0.95rem 1.25rem;border-radius:12px;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.65rem;font-weight:600;font-size:0.9rem;">
-                <iconify-icon icon="lucide:alert-circle" width="20" style="color:#DC2626;flex-shrink:0;"></iconify-icon>
+            <div class="sh-alert-danger" data-server-profile-alert="true" style="display:flex;align-items:center;gap:0.65rem;">
+                <iconify-icon icon="lucide:alert-circle" width="20" style="color:var(--color-danger);flex-shrink:0;"></iconify-icon>
                 <span>@TempData["ProfileError"]</span>
             </div>
         }
+        <div id="profileAjaxAlert" hidden></div>
 
         <div class="profile-layout">
             <!-- CỘT TRÁI: THẺ HỘI VIÊN ĐIỆN TỬ (ATHLETE PASSPORT) -->
@@ -281,7 +74,15 @@
                 </div>
                 <div class="member-passport-body">
                     <div class="member-avatar-wrap">
-                        <img id="liveAvatarPreview" src="@currentAvatar" alt="@Model.FullName">
+                        <img id="liveAvatarPreview"
+                             src="@(hasSavedAvatar ? savedAvatar : null)"
+                             alt="@Model.FullName"
+                             hidden="@(!hasSavedAvatar)"
+                             onerror="if(window.SpikeAvatarSync){window.SpikeAvatarSync.handleImageError(this);}" />
+                        <span id="liveAvatarFallback"
+                              class="spk-profile-avatar-initials"
+                              hidden="@hasSavedAvatar"
+                              aria-hidden="true">@avatarInitials</span>
                     </div>
                     <h2 class="member-name" id="liveNamePreview">@(string.IsNullOrWhiteSpace(Model.FullName) ? "Hội viên CLB" : Model.FullName)</h2>
                     <div class="member-sub">
@@ -361,7 +162,7 @@
 
                 <!-- TAB 1: CẬP NHẬT THÔNG TIN CÁ NHÂN & VĐV -->
                 <div class="profile-tab-pane active" id="tab-info">
-                    <form action="/Account/UpdateProfile" method="post" class="stack">
+                    <form action="/Account/UpdateProfile" method="post" enctype="multipart/form-data" class="stack" id="profileUpdateForm">
                         @Html.AntiForgeryToken()
 
                         <!-- KHỐI 1: THÔNG TIN CÁ NHÂN & LIÊN HỆ -->
@@ -417,27 +218,80 @@
                                     <input type="text" id="profAddress" name="address" class="form-input" value="@Model.Address" placeholder="VD: Thảo Điền, TP. Thủ Đức, TP.HCM">
                                 </div>
 
-                                <div class="form-group" style="margin-bottom:0;">
-                                    <label class="form-label" for="profAvatar">Ảnh đại diện (Chọn nhanh hoặc dán đường dẫn ảnh)</label>
-                                    <input type="text" id="profAvatar" name="avatar" class="form-input text-mono" value="@Model.Avatar" placeholder="https://..." oninput="if(this.value) document.getElementById('liveAvatarPreview').src = this.value">
-                                    <div class="avatar-presets">
-                                        @{
-                                            var presetAvatars = new[]
+                                <div class="spk-avatar-studio" id="avatarStudio" data-saved-avatar="@savedAvatar">
+                                    <div class="spk-avatar-studio-head">
+                                        <div class="spk-avatar-studio-title">
+                                            <span class="form-label">Ảnh đại diện hồ sơ</span>
+                                            <span class="spk-avatar-studio-sub">Hiển thị đồng bộ trên thanh điều hướng &amp; Thẻ Hội Viên</span>
+                                        </div>
+                                        <span class="spk-avatar-source-pill @(hasSavedAvatar ? "is-active" : "")" id="avatarSourcePill">Ảnh đại diện</span>
+                                    </div>
+
+                                    <input type="hidden" id="selectedPresetAvatar" name="avatar" value="@savedAvatar" />
+
+                                    <div class="spk-avatar-upload-card" id="avatarDropzone">
+                                        <div class="spk-avatar-upload-main">
+                                            <div class="spk-avatar-inline-preview">
+                                                <img id="inlineAvatarPreview"
+                                                     src="@(hasSavedAvatar ? savedAvatar : null)"
+                                                     alt="Xem trước ảnh đại diện"
+                                                     hidden="@(!hasSavedAvatar)"
+                                                     onerror="if(window.SpikeAvatarSync){window.SpikeAvatarSync.handleImageError(this);}" />
+                                                <span id="inlineAvatarFallback"
+                                                      class="spk-avatar-inline-initials"
+                                                      hidden="@hasSavedAvatar"
+                                                      aria-hidden="true">@avatarInitials</span>
+                                            </div>
+                                            <div class="spk-avatar-upload-copy">
+                                                <div class="spk-avatar-upload-heading">Tải ảnh từ thiết bị</div>
+                                                <div class="spk-avatar-upload-meta" id="avatarUploadMeta">Kéo thả ảnh vào đây hoặc chọn tệp JPG, JPEG, PNG, WEBP (tối đa 2 MB)</div>
+                                            </div>
+                                        </div>
+                                        <div class="spk-avatar-upload-actions">
+                                            <label for="profAvatarFile" class="btn btn-sm btn-secondary spk-avatar-pick-btn">
+                                                <iconify-icon icon="lucide:upload" width="15"></iconify-icon>
+                                                <span>Chọn ảnh từ máy</span>
+                                            </label>
+                                            <button type="button" id="avatarClearUploadBtn" class="btn btn-sm btn-ghost" hidden>Hủy tệp</button>
+                                            <input type="file"
+                                                   id="profAvatarFile"
+                                                   name="avatarFile"
+                                                   class="sr-only"
+                                                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                                        </div>
+                                    </div>
+
+                                    <div class="spk-avatar-alert" id="avatarUploadError" role="alert" hidden>
+                                        <iconify-icon icon="lucide:alert-circle" width="16" style="flex-shrink:0;"></iconify-icon>
+                                        <span id="avatarUploadErrorText"></span>
+                                    </div>
+
+                                    <div class="spk-avatar-presets-section">
+                                        <div class="spk-avatar-presets-head">
+                                            <span class="spk-avatar-presets-label">Hoặc chọn nhanh nhân vật thể thao Spike OS</span>
+                                            <span class="spk-avatar-presets-count">@cartoonAvatars.Length mẫu minh họa</span>
+                                        </div>
+                                        <div class="spk-avatar-grid" role="group" aria-label="Chọn nhanh nhân vật đại diện">
+                                            @foreach (var item in cartoonAvatars)
                                             {
-                                                "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=240&q=80",
-                                                "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=240&q=80",
-                                                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=80",
-                                                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=80",
-                                                "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=240&q=80",
-                                                "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=240&q=80"
-                                            };
-                                        }
-                                        @foreach (var url in presetAvatars)
-                                        {
-                                            <button type="button" class="avatar-preset-item @(currentAvatar == url ? "selected" : "")" onclick="selectPresetAvatar('@url', this)" title="Chọn ảnh đại diện này">
-                                                <img src="@url" alt="Avatar">
-                                            </button>
-                                        }
+                                                bool isSelected = hasSavedAvatar && string.Equals(savedAvatar, item.Url, StringComparison.OrdinalIgnoreCase);
+                                                <button type="button"
+                                                        class="spk-avatar-tile @(isSelected ? "is-selected" : "")"
+                                                        data-avatar-url="@item.Url"
+                                                        data-avatar-name="@item.Name"
+                                                        aria-pressed="@(isSelected ? "true" : "false")"
+                                                        onclick="selectPresetAvatar('@item.Url', this)"
+                                                        title="Chọn nhân vật @item.Name">
+                                                    <span class="spk-avatar-check" aria-hidden="true">
+                                                        <iconify-icon icon="lucide:check" width="11"></iconify-icon>
+                                                    </span>
+                                                    <span class="spk-avatar-tile-thumb">
+                                                        <img src="@item.Url" alt="@item.Name" loading="lazy">
+                                                    </span>
+                                                    <span class="spk-avatar-tile-name">@item.Name.Split(' ')[0]</span>
+                                                </button>
+                                            }
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -495,10 +349,10 @@
                                         <label class="form-label" for="profPaddle">Dòng vợt Pickleball đang sử dụng</label>
                                         <input type="text" id="profPaddle" name="paddleBrand" class="form-input" value="@Model.PaddleBrand" placeholder="VD: Joola Perseus 16mm Carbon" oninput="document.getElementById('livePaddlePreview').textContent = this.value || 'Chưa cập nhật'">
                                         <div class="paddle-chips">
-                                            <span class="paddle-chip" onclick="setPaddleBrand('Joola Perseus 16mm')">Joola Perseus 16mm</span>
-                                            <span class="paddle-chip" onclick="setPaddleBrand('Selkirk Vanguard Control')">Selkirk Vanguard</span>
-                                            <span class="paddle-chip" onclick="setPaddleBrand('Six Zero DBD 16mm')">Six Zero DBD 16mm</span>
-                                            <span class="paddle-chip" onclick="setPaddleBrand('CRBN 1X Power')">CRBN 1X Power</span>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('Joola Perseus 16mm')">Joola Perseus 16mm</button>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('Selkirk Vanguard Control')">Selkirk Vanguard</button>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('Six Zero DBD 16mm')">Six Zero DBD 16mm</button>
+                                            <button type="button" class="paddle-chip" onclick="setPaddleBrand('CRBN 1X Power')">CRBN 1X Power</button>
                                         </div>
                                     </div>
 
@@ -531,7 +385,7 @@
                         </div>
 
                         <div style="display:flex;justify-content:flex-end;gap:0.85rem;">
-                            <button type="submit" class="btn btn-primary btn-lg">
+                            <button type="submit" id="profileSaveSubmitBtn" class="btn btn-primary btn-lg">
                                 <iconify-icon icon="lucide:save" width="18"></iconify-icon>
                                 <span>Lưu hồ sơ cá nhân &amp; Vận động viên</span>
                             </button>
@@ -588,17 +442,31 @@
                                                               : b.Status == "approved" ? "Đã duyệt"
                                                               : b.Status == "pending" ? "Chờ duyệt"
                                                               : b.Status == "rejected" ? "Đã hủy" : "Hoàn thành";
-                                            int fee = b.TotalPaid > 0 ? b.TotalPaid : b.CourtFee;
+                                            int fee = b.AmountDue > 0 ? b.AmountDue : (b.CourtFee + b.PosTotal - b.DiscountAmount);
+                                            int remainingDue = Math.Max(0, fee - b.PaidAmount);
+                                            bool canPayPayPal = remainingDue > 0 && (b.Status == "pending" || b.Status == "approved" || b.Status == "playing");
                                             <tr>
                                                 <td><span class="text-mono font-bold" style="color:var(--color-indigo);">@b.BookingCode</span></td>
                                                 <td><span class="font-semibold text-xs">@b.BookingDate</span></td>
                                                 <td><span class="badge badge-neutral">@(b.Court?.CourtName ?? $"Sân #{b.CourtId}")</span></td>
                                                 <td class="text-mono font-semibold">@b.StartTime <span class="text-xs text-muted">(@(b.Duration)p)</span></td>
                                                 <td>@b.Players người</td>
-                                                <td class="text-mono font-bold" style="color:var(--color-primary);">@fee.ToString("N0") đ</td>
+                                                <td class="text-mono font-bold" style="color:var(--color-primary);">
+                                                    <div>@fee.ToString("N0") đ</div>
+                                                    @if (remainingDue > 0)
+                                                    {
+                                                        <div class="text-xs text-muted">Còn lại: @remainingDue.ToString("N0") đ</div>
+                                                    }
+                                                </td>
                                                 <td><span class="badge @badgeCls">@statusText</span></td>
                                                 <td>
-                                                    <a href="/Lookup" class="btn btn-outline btn-xs">Xem QR</a>
+                                                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                                                        <a href="/Lookup?code=@Uri.EscapeDataString(b.BookingCode)" class="btn btn-outline btn-xs">Xem QR</a>
+                                                        @if (canPayPayPal)
+                                                        {
+                                                            <button type="button" class="btn btn-primary btn-xs" onclick="payProfileBookingPayPal('@b.BookingCode', this)">PayPal</button>
+                                                        }
+                                                    </div>
                                                 </td>
                                             </tr>
                                         }
@@ -647,29 +515,5 @@
 </main>
 
 @section Scripts {
-    <script>
-        function switchProfileTab(tabKey, btnEl) {
-            document.querySelectorAll('.profile-tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.profile-tab-pane').forEach(p => p.classList.remove('active'));
-            if (btnEl) btnEl.classList.add('active');
-            const target = document.getElementById('tab-' + tabKey);
-            if (target) target.classList.add('active');
-        }
-
-        function selectPresetAvatar(url, btnEl) {
-            const input = document.getElementById('profAvatar');
-            const preview = document.getElementById('liveAvatarPreview');
-            if (input) input.value = url;
-            if (preview) preview.src = url;
-            document.querySelectorAll('.avatar-preset-item').forEach(b => b.classList.remove('selected'));
-            if (btnEl) btnEl.classList.add('selected');
-        }
-
-        function setPaddleBrand(brand) {
-            const input = document.getElementById('profPaddle');
-            const preview = document.getElementById('livePaddlePreview');
-            if (input) input.value = brand;
-            if (preview) preview.textContent = brand;
-        }
-    </script>
+    <script src="~/js/pages/profile.js" asp-append-version="true"></script>
 }
